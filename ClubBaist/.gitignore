@@ -41,3 +41,9 @@ artifacts/
 
 # ASP.NET Core
 appsettings.Development.json
+
+**/bin/
+**/obj/
+**/.vscode/
+**/appsettings.json
+**/appsettings.Development.json

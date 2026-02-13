@@ -5,6 +5,12 @@
 *.userosscache
 *.sln.docstates
 
+**/bin/
+**/obj/
+**/.vscode/
+**/appsettings.json
+**/appsettings.Development.json
+
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
