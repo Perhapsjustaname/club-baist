@@ -1,0 +1,90 @@
+@page "/register"
+@using ClubBaist.Data
+@using ClubBaist.Models
+@rendermode InteractiveServer
+@inject ClubBaistDbContext DB
+@inject NavigationManager Nav
+
+<PageTitle>Register - CLUB-BAIST</PageTitle>
+
+<div class="row justify-content-center mt-5">
+    <div class="col-md-4 border p-4 shadow-sm bg-white">
+        <h3 class="mb-3">Create Account</h3>
+        
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger">@errorMessage</div>
+        }
+
+        <div class="mb-3">
+            <label class="form-label">Username</label>
+            <input class="form-control" @bind="username" placeholder="Enter username" />
+        </div>
+        
+        <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-control" @bind="email" placeholder="name@example.com" />
+        </div>
+        
+        <div class="mb-3">
+            <label class="form-label">Password</label>
+            <input type="password" class="form-control" @bind="password" placeholder="••••••••" />
+        </div>
+
+       
+        <div class="mb-3">
+            <label class="form-label">Account Type</label>
+            <select class="form-select" @bind="role">
+                <option value="Member">Member</option>
+                <option value="Staff">Staff</option>
+            </select>
+        </div>
+
+        <button class="btn btn-primary w-100" @onclick="RegisterUser">Sign Up</button>
+        
+        <div class="mt-3 text-center">
+            <small>Already have an account? <a href="/login">Login here</a></small>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string username = "";
+    private string email = "";
+    private string password = "";
+    private string role = "Member";
+    private string errorMessage = "";
+
+    private async Task RegisterUser()
+    {
+        //  validation
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        {
+            errorMessage = "All fields are required.";
+            return;
+        }
+
+        try
+        {
+            var user = new User
+            {
+                Username = username,
+                Email = email,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
+                Role = role
+            };
+
+            DB.Users.Add(user);
+            await DB.SaveChangesAsync();
+            
+            // Redirect
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            //  
+            errorMessage = "Registration failed. The username or email may already be in use.";
+            Console.WriteLine(ex.Message);
+        }
+    }
+}

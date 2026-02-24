@@ -1,6 +1,10 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
+﻿@using ClubBaist.Services
+@inject UserService UserServ
+@inject NavigationManager Nav
+
+<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">CLUB-BAIST</a>
+        <a class="navbar-brand" href="">Club Baist</a>
     </div>
 </div>
 
@@ -12,16 +16,52 @@
             </NavLink>
         </div>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="bookings">
-                <span class="bi bi-calendar3"></span> Bookings
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="register">
-                <span class="bi bi-person-plus-fill"></span> Register
-            </NavLink>
-        </div>
+     
+        @if (UserServ.IsLoggedIn)
+        {
+            <div class="nav-item px-3">
+                <span class="nav-link text-white">
+                    <span class="bi bi-person-circle"></span> @UserServ.CurrentUser?.Username
+                </span>
+            </div>
+            <div class="nav-item px-3">
+                
+                <button class="btn btn-link nav-link w-100 text-start text-white" @onclick="HandleLogout">
+                    <span class="bi bi-box-arrow-right"></span> Logout
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="login">
+                    <span class="bi bi-person-badge"></span> Login
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="register">
+                    <span class="bi bi-plus-square"></span> Register
+                </NavLink>
+            </div>
+        }
     </nav>
 </div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        UserServ.OnChange += StateHasChanged;
+    }
+
+    public void Dispose()
+    {
+    
+        UserServ.OnChange -= StateHasChanged;
+    }
+
+    private void HandleLogout()
+    {
+        UserServ.Logout();
+        Nav.NavigateTo("/login");
+    }
+}

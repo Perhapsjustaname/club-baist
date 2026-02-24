@@ -1,0 +1,92 @@
+@page "/login"
+@using ClubBaist.Data
+@using ClubBaist.Models
+@using ClubBaist.Services
+@using Microsoft.EntityFrameworkCore
+
+@rendermode InteractiveServer
+@inject ClubBaistDbContext DB
+@inject NavigationManager Nav
+@inject UserService UserServ
+
+<PageTitle>Login - CLUB-BAIST</PageTitle>
+
+<div class="row justify-content-center mt-5">
+    <div class="col-md-4 border p-4 shadow-sm bg-white">
+        <h3 class="mb-3 text-center">Login</h3>
+        
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger">@errorMessage</div>
+        }
+        @if (showSuccessMessage)
+{
+    <div class="alert alert-success animate-fade-out">
+        <strong>Success!</strong> Welcome back, @UserServ.CurrentUser?.Username. Redirecting...
+    </div>
+}
+
+        <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-control" @bind="email" @bind:event="oninput" placeholder="name@example.com" />
+        </div>
+        
+        <div class="mb-3">
+            <label class="form-label">Password</label>
+            <input type="password" class="form-control" @bind="password" @bind:event="oninput" placeholder="••••••••" @onkeyup="HandleKeyUp" />
+        </div>
+
+        <button class="btn btn-success w-100" @onclick="HandleLogin">Sign In</button>
+        
+        <div class="mt-3 text-center">
+            <small>New here? <a href="/register">Create an account</a></small>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string email = "";
+    private string password = "";
+    private string errorMessage = "";
+
+    private async Task HandleKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await HandleLogin();
+        }
+    }
+
+    private bool showSuccessMessage = false;
+
+private async Task HandleLogin()
+{
+    errorMessage = "";
+    
+    try 
+    {
+        var user = await DB.Users.FirstOrDefaultAsync(u => u.Email == email);
+
+        if (user != null && BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+        {
+            UserServ.Login(user);
+            showSuccessMessage = true;
+            
+            StateHasChanged(); 
+
+            //  3 seconds then go to home
+            await Task.Delay(3000);
+            Nav.NavigateTo("/");
+        }
+        else
+        {
+            errorMessage = "Invalid email or password.";
+        }
+    }
+    catch (Exception ex) 
+    {
+        errorMessage = "Database connection error.";
+    }
+    
+}
+}

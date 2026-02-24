@@ -1,16 +1,39 @@
 @page "/"
+@using ClubBaist.Services
+@inject UserService UserServ
 
 <PageTitle>Home - CLUB-BAIST</PageTitle>
 
-<div class="container mt-5">
-    <div class="jumbotron text-center shadow-sm p-5 mb-4 bg-light rounded">
-        <h1 class="display-4 text-success">Welcome to CLUB-BAIST</h1>
-        <p class="lead">The premier golf course booking and management system.</p>
-        <hr class="my-4">
-        <p>Ready to hit the links? Sign in or create an account to book your next tee time.</p>
-        <div class="mt-4">
-            <a class="btn btn-primary btn-lg mx-2" href="register">Register</a>
-            <a class="btn btn-outline-success btn-lg mx-2" href="login">Login</a>
+@if (UserServ.IsLoggedIn)
+{
+   
+    <div class="container mt-5">
+        <h1>Welcome Back, @UserServ.CurrentUser?.Username!</h1>
+        <p class="lead">You are now logged into the Member Portal.</p>
+        
+        <div class="row mt-4">
+            <div class="col-md-4">
+                <div class="card shadow-sm border-success">
+                    <div class="card-body">
+                        <h5 class="card-title">Book a Tee Time</h5>
+                        <p class="card-text">Schedule your next round of golf.</p>
+                        <button class="btn btn-success">Book Now</button>
+                    </div>
+                </div>
+            </div>
+            
         </div>
     </div>
-</div>
+}
+else
+{
+   
+    <div class="container mt-5 text-center">
+        <h1>Welcome to Club Baist</h1>
+        <p class="lead">Please log in or register to access the golf booking system.</p>
+        <div class="mt-4">
+            <a href="/login" class="btn btn-primary btn-lg me-2">Login</a>
+            <a href="/register" class="btn btn-outline-secondary btn-lg">Register</a>
+        </div>
+    </div>
+}

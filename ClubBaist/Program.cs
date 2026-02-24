@@ -1,11 +1,18 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.SqlServer;
 using ClubBaist.Components;
-
+using ClubBaist.Services;
+using ClubBaist.Data;
 var builder = WebApplication.CreateBuilder(args);
+
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+builder.Services.AddScoped<UserService>();
 
+builder.Services.AddDbContext<ClubBaistDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.")));
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
