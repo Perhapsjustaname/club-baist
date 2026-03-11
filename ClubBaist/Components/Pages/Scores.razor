@@ -1,0 +1,421 @@
+@page "/scores"
+@using ClubBaist.Data
+@using ClubBaist.Models
+@using ClubBaist.Services
+@using Microsoft.EntityFrameworkCore
+@rendermode InteractiveServer
+@inject UserService UserServ
+@inject IDbContextFactory<ClubBaistDbContext> DBFactory
+
+<PageTitle>Scores &amp; Handicap - Club BAIST</PageTitle>
+
+@if (!UserServ.IsLoggedIn)
+{
+    <div class="alert alert-warning">Please <a href="/login">sign in</a> to view scores.</div>
+}
+else if (memberProfile == null)
+{
+    <div class="alert alert-info">No member profile found. Contact the pro shop.</div>
+}
+else
+{
+    <div class="page-header">
+        <div>
+            <h1 class="page-header-title">Scores &amp; Handicap</h1>
+            <p class="page-header-sub">World Handicap System (WHS) — Golf Canada</p>
+        </div>
+        <button class="btn btn-gold" @onclick="() => showForm = !showForm">
+            <i class="bi bi-plus-lg me-2"></i>@(showForm ? "Cancel" : "Enter New Score")
+        </button>
+    </div>
+
+    <div class="row g-4">
+        <!-- Handicap card -->
+        <div class="col-md-3">
+            <div class="handicap-index-card mb-3">
+                <div class="handicap-label">Handicap Index</div>
+                <div class="handicap-number">@(memberProfile.HandicapIndex?.ToString("F1") ?? "—")</div>
+                <div class="handicap-label mt-1">WHS · Golf Canada</div>
+            </div>
+
+            @if (rounds.Count > 0)
+            {
+                <div class="card">
+                    <div class="card-header-golf"><h5>Stats</h5></div>
+                    <div class="card-body" style="font-size:0.85rem;">
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <span style="color:var(--cb-muted);">Rounds</span>
+                            <span class="fw-bold">@rounds.Count</span>
+                        </div>
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <span style="color:var(--cb-muted);">Best Score</span>
+                            <span class="fw-bold">@rounds.Min(r => r.TotalScore)</span>
+                        </div>
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <span style="color:var(--cb-muted);">Avg Score</span>
+                            <span class="fw-bold">@(rounds.Count > 0 ? rounds.Average(r => r.TotalScore).ToString("F1") : "—")</span>
+                        </div>
+                        <div class="d-flex justify-content-between py-1">
+                            <span style="color:var(--cb-muted);">Best Differential</span>
+                            <span class="fw-bold">@rounds.Min(r => r.ScoreDifferential).ToString("F1")</span>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Main content -->
+        <div class="col-md-9">
+            <!-- Enter scores -->
+            @if (showForm)
+            {
+                <div class="card mb-4">
+                    <div class="card-header-golf">
+                        <h5><i class="bi bi-pencil-fill me-2"></i>Enter Round Score</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (!string.IsNullOrEmpty(formError))
+                        {
+                            <div class="alert alert-danger py-2">@formError</div>
+                        }
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Date Played</label>
+                                <input type="date" class="form-control"
+                                       value="@roundDate.ToString("yyyy-MM-dd")"
+                                       max="@DateTime.Today.ToString("yyyy-MM-dd")"
+                                       @onchange="OnRoundDateChanged" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Course</label>
+                                <input class="form-control" @bind="courseName" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Tee Colour</label>
+                                <select class="form-select" @bind="teeColor" @bind:after="OnTeeChanged">
+                                    <option value="Red">Red</option>
+                                    <option value="White" selected>White</option>
+                                    <option value="Blue">Blue</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Course Rating</label>
+                                <input type="number" step="0.1" class="form-control" @bind="courseRating" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Slope Rating</label>
+                                <input type="number" class="form-control" @bind="slopeRating" />
+                            </div>
+                        </div>
+
+                        <!-- front 9 and back 9 as seperate tables side by side - easier to read than one wide table -->
+                        <div class="mb-3" style="overflow-x:auto;">
+                            <table class="scorecard-table">
+                                <thead>
+                                    <tr>
+                                        <th>Hole</th>
+                                        @for (int i = 1; i <= 9; i++) { <th>@i</th> }
+                                        <th>OUT</th>
+                                    </tr>
+                                    <tr>
+                                        <th>Par</th>
+                                        @for (int i = 0; i < 9; i++) { <th style="color:var(--cb-gold);">@HandicapService.HolePars[i]</th> }
+                                        <th style="color:var(--cb-gold);">@HandicapService.HolePars.Take(9).Sum()</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td style="font-weight:600; text-align:left; padding-left:8px;">Score</td>
+                                        @for (int i = 0; i < 9; i++)
+                                        {
+                                            int idx = i;
+                                            <td>
+                                                <input type="number" min="1" max="15"
+                                                       class="form-control form-control-sm text-center p-1"
+                                                       style="width:42px; margin:0 auto;"
+                                                       value="@holeScores[idx]"
+                                                       @onchange="e => UpdateHole(idx, e)" />
+                                            </td>
+                                        }
+                                        <td style="font-weight:700; color:var(--cb-green-dark);">@holeScores.Take(9).Where(s => s > 0).Sum()</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <table class="scorecard-table mt-2">
+                                <thead>
+                                    <tr>
+                                        <th>Hole</th>
+                                        @for (int i = 10; i <= 18; i++) { <th>@i</th> }
+                                        <th>IN</th>
+                                        <th>TOT</th>
+                                    </tr>
+                                    <tr>
+                                        <th>Par</th>
+                                        @for (int i = 9; i < 18; i++) { <th style="color:var(--cb-gold);">@HandicapService.HolePars[i]</th> }
+                                        <th style="color:var(--cb-gold);">@HandicapService.HolePars.Skip(9).Sum()</th>
+                                        <th style="color:var(--cb-gold);">@HandicapService.HolePars.Sum()</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td style="font-weight:600; text-align:left; padding-left:8px;">Score</td>
+                                        @for (int i = 9; i < 18; i++)
+                                        {
+                                            int idx = i;
+                                            <td>
+                                                <input type="number" min="1" max="15"
+                                                       class="form-control form-control-sm text-center p-1"
+                                                       style="width:42px; margin:0 auto;"
+                                                       value="@holeScores[idx]"
+                                                       @onchange="e => UpdateHole(idx, e)" />
+                                            </td>
+                                        }
+                                        <td style="font-weight:700; color:var(--cb-green-dark);">@holeScores.Skip(9).Where(s => s > 0).Sum()</td>
+                                        <td style="font-weight:700; color:var(--cb-green-dark);">@holeScores.Where(s => s > 0).Sum()</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        @if (holeScores.Any(s => s > 0))
+                        {
+                            var total = holeScores.Where(s => s > 0).Sum();
+                            var diff = HandicapService.CalculateScoreDifferential(total, courseRating, slopeRating);
+                            <div class="alert alert-info py-2" style="font-size:0.85rem;">
+                                <strong>Score:</strong> @total &bull;
+                                <strong>Differential:</strong> @diff.ToString("F1") &bull;
+                                <strong>Formula:</strong> (@total − @courseRating) × 113 ÷ @slopeRating
+                            </div>
+                        }
+
+                        <button class="btn btn-gold px-4" @onclick="SubmitScore" disabled="@isSaving">
+                            @if (isSaving) { <span class="spinner-border spinner-border-sm me-2"></span> }
+                            <i class="bi bi-save-fill me-2"></i>Submit Score
+                        </button>
+                    </div>
+                </div>
+            }
+
+            <!-- Rounds history -->
+            <div class="card">
+                <div class="card-header-golf">
+                    <h5><i class="bi bi-list-ol me-2"></i>Score History — Last 20 Rounds</h5>
+                </div>
+                <div class="card-body p-0">
+                    @if (!rounds.Any())
+                    {
+                        <div class="text-center py-5 text-muted">
+                            <i class="bi bi-trophy" style="font-size:3rem; color:var(--cb-gold); opacity:0.4;"></i>
+                            <p class="mt-3 mb-0" style="font-size:0.9rem;">No rounds recorded yet. Enter your first score above!</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <table class="table mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Course</th>
+                                    <th>Tee</th>
+                                    <th>Rating/Slope</th>
+                                    <th>Score</th>
+                                    <th>Differential</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @{
+                                    // stars mark which differentials are actually used in the handicap calc
+                                    var (last20, best8, _) = HandicapService.GetHandicapBreakdown(rounds);
+                                }
+                                @for (int i = 0; i < rounds.Count; i++)
+                                {
+                                    var r = rounds[i];
+                                    bool isBest = i < rounds.Count && best8.Contains(r.ScoreDifferential);
+                                    <tr>
+                                        <td>@r.RoundDate.ToString("MMM d, yyyy")</td>
+                                        <td>@r.CourseName</td>
+                                        <td>
+                                            <span class="badge" style="background:@TeeColorStyle(r.TeeColor); color:white; font-size:0.72rem;">@r.TeeColor</span>
+                                        </td>
+                                        <td style="font-size:0.82rem;">@r.CourseRating / @r.SlopeRating</td>
+                                        <td style="font-weight:700;">@r.TotalScore</td>
+                                        <td>
+                                            <span class="@(isBest ? "fw-bold text-success" : "")">
+                                                @r.ScoreDifferential.ToString("F1")
+                                                @if (isBest) { <i class="bi bi-star-fill ms-1" style="font-size:0.7rem;"></i> }
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-danger" style="font-size:0.72rem;"
+                                                    @onclick="() => DeleteRound(r.RoundId)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        <div class="p-3" style="font-size:0.78rem; color:var(--cb-muted); background:var(--cb-cream);">
+                            <i class="bi bi-star-fill text-success me-1"></i> = Best 8 differentials used in handicap calculation
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    MemberProfile? memberProfile;
+    private List<PlayerRound> rounds = new();
+    private bool showForm = false;
+    bool isSaving = false;
+    private string formError = "";
+
+    // need at least 3 rounds before handicap calculates - WHS rule, HandicapService returns 0 until then
+    // Form fields
+    private DateTime roundDate  = DateTime.Today;
+    private string courseName   = "Club BAIST";
+    private string teeColor     = "White";
+    private decimal courseRating = 68.8m;
+    int slopeRating = 123;
+    private int[] holeScores = new int[18];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserServ.IsLoggedIn) return;
+
+        await using var db = DBFactory.CreateDbContext();
+        memberProfile = await db.MemberProfiles
+            .FirstOrDefaultAsync(m => m.UserId == UserServ.CurrentUser!.UserId);
+
+        if (memberProfile != null)
+            await LoadRounds();
+    }
+
+    private async Task LoadRounds()
+    {
+        if (memberProfile == null) return;
+        await using var db = DBFactory.CreateDbContext();
+        rounds = await db.PlayerRounds
+            .Where(r => r.MemberProfileId == memberProfile.MemberProfileId)
+            .OrderByDescending(r => r.RoundDate)
+            .Take(20)
+            .ToListAsync();
+    }
+
+    private void OnRoundDateChanged(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var d))
+            roundDate = d;
+    }
+
+    private void OnTeeChanged()
+    {
+        if (courseName == "Club BAIST" && HandicapService.ClubBaistTees.TryGetValue(teeColor, out var info))
+        {
+            courseRating = info.MenRating;
+            slopeRating  = info.MenSlope;
+        }
+    }
+
+    private void UpdateHole(int idx, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var v))
+            holeScores[idx] = v;
+    }
+
+    private async Task SubmitScore()
+    {
+        formError = "";
+        if (memberProfile == null) return;
+
+        int filled = holeScores.Count(s => s > 0);
+        if (filled < 18)
+        {
+            formError = $"Please enter scores for all 18 holes ({filled}/18 entered).";
+            return;
+        }
+
+        var total = holeScores.Sum();
+        var diff  = HandicapService.CalculateScoreDifferential(total, courseRating, slopeRating);
+
+        isSaving = true;
+        var round = new PlayerRound
+        {
+            MemberProfileId    = memberProfile.MemberProfileId,
+            RoundDate          = roundDate,
+            CourseName         = courseName.Trim(),
+            TeeColor           = teeColor,
+            CourseRating       = courseRating,
+            SlopeRating        = slopeRating,
+            Par                = HandicapService.HolePars.Sum(),
+            TotalScore         = total,
+            ScoreDifferential  = diff,
+            IsApprovedCourse   = true,
+            EnteredAt          = DateTime.UtcNow
+        };
+
+        await using var db = DBFactory.CreateDbContext();
+        db.PlayerRounds.Add(round);
+        await db.SaveChangesAsync();
+
+        // Add hole scores
+        for (int i = 0; i < 18; i++)
+        {
+            db.HoleScores.Add(new HoleScore
+            {
+                RoundId    = round.RoundId,
+                HoleNumber = i + 1,
+                Par        = HandicapService.HolePars[i],
+                Score      = holeScores[i]
+            });
+        }
+        await db.SaveChangesAsync();
+
+        // reload rounds FIRST, then recalc handicap ,order matters, needs the new round in the list
+        await LoadRounds();
+        memberProfile.HandicapIndex = HandicapService.CalculateHandicapIndex(rounds);
+        db.MemberProfiles.Update(memberProfile);
+        await db.SaveChangesAsync();
+
+        // Reset form
+        holeScores   = new int[18];
+        roundDate    = DateTime.Today;
+        courseName   = "Club BAIST";
+        teeColor     = "White";
+        courseRating = 68.8m;
+        slopeRating  = 123;
+        showForm     = false;
+        isSaving     = false;
+
+        await LoadRounds();
+    }
+
+    // delete also recalcs handicap, removing a good round could change the index
+    private async Task DeleteRound(int roundId)
+    {
+        if (memberProfile == null) return;
+        await using var db = DBFactory.CreateDbContext();
+        var r = await db.PlayerRounds.FindAsync(roundId);
+        if (r != null && r.MemberProfileId == memberProfile.MemberProfileId)
+        {
+            db.PlayerRounds.Remove(r);
+            await db.SaveChangesAsync();
+            await LoadRounds();
+            memberProfile.HandicapIndex = HandicapService.CalculateHandicapIndex(rounds);
+            db.MemberProfiles.Update(memberProfile);
+            await db.SaveChangesAsync();
+        }
+    }
+
+    private string TeeColorStyle(string tee) => tee switch
+    {
+        "Red"  => "#c0392b",
+        "Blue" => "#2980b9",
+        _      => "#7f8c8d"
+    };
+}

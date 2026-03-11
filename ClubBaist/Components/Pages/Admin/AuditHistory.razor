@@ -1,0 +1,115 @@
+@page "/admin/auditlog"
+@using ClubBaist.Models
+@using ClubBaist.Services
+@rendermode InteractiveServer
+@inject UserService UserServ
+@inject AuditService AuditSvc
+
+<PageTitle>Audit Log — Club BAIST Admin</PageTitle>
+
+@if (!IsAuthorized())
+{
+    <div class="alert alert-danger">
+        <i class="bi bi-lock-fill me-2"></i>Access denied. Admin role required.
+    </div>
+}
+else
+{
+    <div class="page-header">
+        <div>
+            <h1 class="page-header-title">Audit Log</h1>
+            <p class="page-header-sub">Staff and admin action history — last @logs.Count entries</p>
+        </div>
+    </div>
+
+    <!-- filter bar -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-3">
+                    <input class="form-control" @bind="searchUser" placeholder="Filter by username..." @bind:event="oninput" />
+                </div>
+                <div class="col-md-3">
+                    <input class="form-control" @bind="searchAction" placeholder="Filter by action..." @bind:event="oninput" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (!FilteredLogs().Any())
+    {
+        <div class="card">
+            <div class="card-body text-center py-5 text-muted">
+                <i class="bi bi-journal-x" style="font-size:3rem; opacity:0.4;"></i>
+                <p class="mt-3 mb-0">No audit entries found.</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-body p-0">
+                <table class="table mb-0" style="font-size:0.85rem;">
+                    <thead>
+                        <tr>
+                            <th style="width:160px;">Timestamp</th>
+                            <th style="width:120px;">User</th>
+                            <th style="width:160px;">Action</th>
+                            <th style="width:120px;">Target</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var log in FilteredLogs())
+                        {
+                            <tr>
+                                <td style="color:var(--cb-muted); font-size:0.78rem; white-space:nowrap;">
+                                    @log.Timestamp.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                                </td>
+                                <td>
+                                    <span class="status-chip badge-gold" style="font-size:0.72rem;">@log.Username</span>
+                                </td>
+                                <td style="font-weight:600; color:var(--cb-green-dark);">@log.Action</td>
+                                <td style="color:var(--cb-muted); font-size:0.78rem;">
+                                    @if (log.TargetType != null)
+                                    {
+                                        <span>@log.TargetType</span>
+                                        @if (log.TargetId != null) { <span class="ms-1">#@log.TargetId</span> }
+                                    }
+                                </td>
+                                <td style="color:var(--cb-muted);">@log.Details</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    List<AuditLog> logs = new();
+    string searchUser   = "";
+    string searchAction = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        logs = await AuditSvc.GetRecentAsync(500);
+    }
+
+    private IEnumerable<AuditLog> FilteredLogs()
+    {
+        var q = logs.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(searchUser))
+            q = q.Where(l => l.Username.ToLower().Contains(searchUser.ToLower()));
+
+        if (!string.IsNullOrWhiteSpace(searchAction))
+            q = q.Where(l => l.Action.ToLower().Contains(searchAction.ToLower()));
+
+        return q;
+    }
+
+    // only admin - staff shouldnt be able to see thier own audit trail
+    private bool IsAuthorized() => UserServ.CurrentUser?.Role == "Admin";
+}

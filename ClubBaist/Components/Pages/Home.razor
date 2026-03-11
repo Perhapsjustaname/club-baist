@@ -1,39 +1,466 @@
 @page "/"
-@using ClubBaist.Services
+@using ClubBaist.Data
+@using ClubBaist.Models
+@using Microsoft.EntityFrameworkCore
+@rendermode InteractiveServer
 @inject UserService UserServ
+@inject IDbContextFactory<ClubBaistDbContext> DBFactory
+@inject NavigationManager Nav
 
-<PageTitle>Home - CLUB-BAIST</PageTitle>
+<PageTitle>Club BAIST — Premier Golf Experience</PageTitle>
 
 @if (UserServ.IsLoggedIn)
 {
-   
-    <div class="container mt-5">
-        <h1>Welcome Back, @UserServ.CurrentUser?.Username!</h1>
-        <p class="lead">You are now logged into the Member Portal.</p>
-        
-        <div class="row mt-4">
-            <div class="col-md-4">
-                <div class="card shadow-sm border-success">
-                    <div class="card-body">
-                        <h5 class="card-title">Book a Tee Time</h5>
-                        <p class="card-text">Schedule your next round of golf.</p>
-                        <button class="btn btn-success">Book Now</button>
+    <!-- Logged-in dashboard -->
+    <!-- Spinning golf ball animation (asked AI to generate this) -->
+    <div class="spin-ball-wrap" aria-hidden="true">
+        <svg class="spin-ball-svg" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" width="54" height="54">
+            <circle cx="30" cy="30" r="28" fill="white" stroke="rgba(176,137,104,0.25)" stroke-width="1.5"/>
+            <!-- Seam curves -->
+            <path d="M 8 22 Q 30 30 52 22" fill="none" stroke="rgba(127,85,57,0.22)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M 8 38 Q 30 30 52 38" fill="none" stroke="rgba(127,85,57,0.22)" stroke-width="2" stroke-linecap="round"/>
+            <!-- Dimples -->
+            <circle cx="30" cy="14" r="2.5" fill="rgba(0,0,0,0.07)"/>
+            <circle cx="21" cy="18" r="2.2" fill="rgba(0,0,0,0.07)"/>
+            <circle cx="39" cy="18" r="2.2" fill="rgba(0,0,0,0.07)"/>
+            <circle cx="15" cy="27" r="2.2" fill="rgba(0,0,0,0.07)"/>
+            <circle cx="30" cy="24" r="2.5" fill="rgba(0,0,0,0.07)"/>
+            <circle cx="45" cy="27" r="2.2" fill="rgba(0,0,0,0.07)"/>
+            <circle cx="15" cy="38" r="2.2" fill="rgba(0,0,0,0.07)"/>
+            <circle cx="30" cy="36" r="2.5" fill="rgba(0,0,0,0.07)"/>
+            <circle cx="45" cy="38" r="2.2" fill="rgba(0,0,0,0.07)"/>
+            <circle cx="21" cy="44" r="2.2" fill="rgba(0,0,0,0.07)"/>
+            <circle cx="39" cy="44" r="2.2" fill="rgba(0,0,0,0.07)"/>
+            <circle cx="30" cy="48" r="2.5" fill="rgba(0,0,0,0.07)"/>
+        </svg>
+    </div>
+
+    <div class="page-header">
+        <div>
+            <h1 class="page-header-title">Welcome back, @memberProfile?.FirstName ?? UserServ.CurrentUser?.Username</h1>
+            <p class="page-header-sub">@DateTime.Now.ToString("dddd, MMMM d, yyyy") &bull; @GetSeasonStatus()</p>
+        </div>
+        @if (memberProfile != null)
+        {
+            <div class="d-flex align-items-center gap-2">
+                <span class="status-chip @GetTierBadgeClass()">
+                    <i class="bi bi-circle-fill" style="font-size:0.5rem;"></i>
+                    @memberProfile.Tier @memberProfile.MemberType
+                </span>
+                @if (memberProfile.HandicapIndex.HasValue)
+                {
+                    <span class="status-chip badge-green">
+                        HCP @memberProfile.HandicapIndex.Value.ToString("F1")
+                    </span>
+                }
+            </div>
+        }
+    </div>
+
+    <!-- Quick action -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card card-action card-gold-accent h-100" style="cursor:pointer;" @onclick='() => Nav.NavigateTo("/bookings")'>
+                <div class="card-body text-center py-4">
+                    <div style="font-size:2.5rem; color:var(--cb-gold); margin-bottom:0.8rem;">
+                        <i class="bi bi-calendar-plus-fill"></i>
                     </div>
+                    <h6 class="fw-bold" style="color:var(--cb-green-dark);">Book Tee Time</h6>
+                    <p class="text-muted mb-0" style="font-size:0.8rem;">Reserve your next round on the course</p>
                 </div>
             </div>
-            
+        </div>
+        <div class="col-md-3">
+            <div @onclick='() => Nav.NavigateTo("/teesheet")' class="card card-action card-green-accent h-100" style="cursor:pointer;">
+                <div class="card-body text-center py-4">
+                    <div style="font-size:2.5rem; color:var(--cb-green); margin-bottom:0.8rem;">
+                        <i class="bi bi-calendar3"></i>
+                    </div>
+                    <h6 class="fw-bold" style="color:var(--cb-green-dark);">Daily Tee Sheet</h6>
+                    <p class="text-muted mb-0" style="font-size:0.8rem;">See all tee times and who's playing</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-action h-100" @onclick='() => Nav.NavigateTo("/scores")' style="cursor:pointer; border-top:4px solid #8B6914;">
+                <div class="card-body text-center py-4">
+                    <div style="font-size:2.5rem; color:#8B6914; margin-bottom:0.8rem;">
+                        <i class="bi bi-trophy-fill"></i>
+                    </div>
+                    <h6 class="fw-bold" style="color:var(--cb-green-dark);">Scores &amp; Handicap</h6>
+                    <p class="text-muted mb-0" style="font-size:0.8rem;">Track your WHS handicap index</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-action h-100" style="cursor:pointer; border-top:4px solid var(--cb-muted);" @onclick='() => Nav.NavigateTo("/profile")'>
+                <div class="card-body text-center py-4">
+                    <div style="font-size:2.5rem; color:var(--cb-muted); margin-bottom:0.8rem;">
+                        <i class="bi bi-person-fill"></i>
+                    </div>
+                    <h6 style="color:var(--cb-green-dark);" class="fw-bold">My Profile</h6>
+                    <p class="text-muted mb-0" style="font-size:0.8rem;">View membership details and account</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Upcoming tee times -->
+        <div class="col-md-7">
+            <div class="card h-100">
+                <div class="card-header-golf">
+                    <h5><i class="bi bi-calendar-check me-2"></i>Upcoming Tee Times</h5>
+                </div>
+                <div class="card-body p-0">
+                    @if (upcomingBookings == null)
+                    {
+                        <div class="p-4 text-center text-muted">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                        </div>
+                    }
+                    else if (!upcomingBookings.Any())
+                    {
+                        <div class="p-4 text-center">
+                            <i class="bi bi-calendar-x" style="font-size:2rem; color:var(--cb-muted);"></i>
+                            <p class="mt-2 mb-0 text-muted" style="font-size:0.88rem;">No upcoming tee times. <a href="/bookings" class="text-green">Book one now!</a></p>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var booking in upcomingBookings)
+                        {
+                            <div class="tee-sheet-row booked px-3">
+                                <div class="tee-sheet-time">
+                                    @booking.TeeTime.ToString("h:mm tt")
+                                </div>
+                                <div class="tee-sheet-member">
+                                    <div style="font-weight:600; font-size:0.88rem;">@booking.TeeDate.ToString("ddd, MMM d")</div>
+                                    <div style="font-size:0.78rem; color:var(--cb-muted);">
+                                        @booking.NumberOfPlayers player@(booking.NumberOfPlayers > 1 ? "s" : "")
+                                        @if (booking.NumberOfCarts > 0) { <span> &bull; @booking.NumberOfCarts cart@(booking.NumberOfCarts > 1 ? "s" : "")</span> }
+                                    </div>
+                                </div>
+                                <span class="badge bg-success" style="font-size:0.7rem;">Confirmed</span>
+                            </div>
+                        }
+                    }
+                </div>
+                <div class="card-footer bg-white border-0 py-2">
+                    <a href="/bookings" class="btn btn-sm btn-green px-3">
+                        <i class="bi bi-plus-lg me-1"></i>Book New Time
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Handicap -->
+        <div class="col-md-5">
+            <div class="handicap-index-card mb-3">
+                <div class="handicap-label">WHS Handicap Index</div>
+                <div class="handicap-number">
+                    @(memberProfile?.HandicapIndex?.ToString("F1") ?? "—")
+                </div>
+                <div class="handicap-label mt-1">Registered &bull; Golf Canada</div>
+            </div>
+
+            <div class="card">
+                <div class="card-header-golf">
+                    <h5><i class="bi bi-bar-chart-fill me-2"></i>Season Stats</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <div class="stat-card">
+                                <div class="stat-value">@roundsCount</div>
+                                <div class="stat-label">Rounds Played</div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="stat-card" style="border-left-color:var(--cb-green);">
+                                <div class="stat-value">@bookingsCount</div>
+                                <div class="stat-label">Bookings Made</div>
+                            </div>
+                        </div>
+                    </div>
+                    @if (memberProfile != null)
+                    {
+                        <div class="mt-3 pt-2 border-top" style="font-size:0.8rem; color:var(--cb-muted);">
+                            <div>Member since @memberProfile.MemberSince.Year</div>
+                            <div>Member #: @memberProfile.MemberNumber</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Announcements -->
+    <div class="card mt-4">
+        <div class="card-header-golf">
+            <h5><i class="bi bi-megaphone-fill me-2"></i>Club Announcements</h5>
+        </div>
+        <div class="card-body">
+            <div class="d-flex gap-3 align-items-start mb-3">
+                <div style="background:rgba(221,184,146,0.18); border-radius:8px; padding:0.5rem 0.75rem; min-width:80px; text-align:center;">
+                    <div style="font-size:0.65rem; color:var(--cb-muted); text-transform:uppercase; letter-spacing:0.08em;">Mar</div>
+                    <div style="font-size:1.3rem; font-weight:700; color:var(--cb-green-dark); font-family:'Playfair Display',serif;">1</div>
+                </div>
+                <div>
+                    <strong style="color:var(--cb-green-dark);">Golf Season Opens</strong>
+                    <p class="mb-0 text-muted" style="font-size:0.85rem;">The 2026 golf season officially opens March 1. All tee time bookings are now available. Welcome back to the course!</p>
+                </div>
+            </div>
+            <hr class="gold-divider" />
+            <div class="d-flex gap-3 align-items-start">
+                <div style="background:rgba(156,102,68,0.12); border-radius:8px; padding:0.5rem 0.75rem; min-width:80px; text-align:center;">
+                    <div style="font-size:0.65rem; color:var(--cb-muted); text-transform:uppercase; letter-spacing:0.08em;">May</div>
+                    <div style="font-size:1.3rem; font-weight:700; color:var(--cb-green-dark); font-family:'Playfair Display',serif;">18</div>
+                </div>
+                <div>
+                    <strong style="color:var(--cb-green-dark);">The grass is green!</strong>
+                    <p class="mb-0 text-muted" style="font-size:0.85rem;">We are happy to annouce that the grass is green this year and not purple!</p>
+                </div>
+            </div>
+               <div class="d-flex gap-3 align-items-start">
+                <div style="background:rgba(156,102,68,0.12); border-radius:8px; padding:0.5rem 0.75rem; min-width:80px; text-align:center;">
+                    <div style="font-size:0.65rem; color:var(--cb-muted); text-transform:uppercase; letter-spacing:0.08em;">May</div>
+                    <div style="font-size:1.3rem; font-weight:700; color:var(--cb-green-dark); font-family:'Playfair Display',serif;">18</div>
+                </div>
+                <div>
+                    <strong style="color:var(--cb-green-dark);">Free Coffee!</strong>
+                    <p class="mb-0 text-muted" style="font-size:0.85rem;">Buy one coffee and get 1% off your next cup!</p>
+                </div>
+            </div>
         </div>
     </div>
 }
 else
 {
-   
-    <div class="container mt-5 text-center">
-        <h1>Welcome to Club Baist</h1>
-        <p class="lead">Please log in or register to access the golf booking system.</p>
-        <div class="mt-4">
-            <a href="/login" class="btn btn-primary btn-lg me-2">Login</a>
-            <a href="/register" class="btn btn-outline-secondary btn-lg">Register</a>
+    <!-- Landing page -->
+    <div class="hero-section">
+        <!-- Animated golf club swing (develoepd with ai)-->
+        <div class="hero-golf-anim" aria-hidden="true">
+            <svg viewBox="0 0 170 280" xmlns="http://www.w3.org/2000/svg" width="170" height="280">
+                <!-- Swinging club group, pivot at grip -->
+                <g class="hero-swing-group">
+                    <!-- Grip cap -->
+                    <circle cx="32" cy="28" r="6" fill="rgba(230,204,178,0.55)"/>
+                    <!-- Shaft -->
+                    <line x1="32" y1="28" x2="122" y2="205"
+                          stroke="rgba(230,204,178,0.75)" stroke-width="4" stroke-linecap="round"/>
+                    <!-- Hosel -->
+                    <ellipse cx="123" cy="207" rx="5" ry="6" fill="rgba(221,184,146,0.8)"/>
+                    <!-- Iron club head -->
+                    <rect x="112" y="208" width="36" height="13" rx="5"
+                          fill="rgba(221,184,146,0.9)"
+                          transform="rotate(-28 112 208)"/>
+                    <!-- Grooves on face -->
+                    <line x1="115" y1="214" x2="126" y2="210" stroke="rgba(127,85,57,0.35)" stroke-width="1.2"/>
+                    <line x1="115" y1="217" x2="126" y2="213" stroke="rgba(127,85,57,0.35)" stroke-width="1.2"/>
+                </g>
+                <!-- Golf ball on tee -->
+                <circle cx="148" cy="235" r="13" fill="rgba(255,255,255,0.92)"/>
+                <!-- Dimples -->
+                <circle cx="143" cy="230" r="2.2" fill="rgba(0,0,0,0.09)"/>
+                <circle cx="152" cy="230" r="2.2" fill="rgba(0,0,0,0.09)"/>
+                <circle cx="148" cy="237" r="2.2" fill="rgba(0,0,0,0.09)"/>
+                <circle cx="142" cy="237" r="2.2" fill="rgba(0,0,0,0.09)"/>
+                <circle cx="154" cy="237" r="2.2" fill="rgba(0,0,0,0.09)"/>
+                <circle cx="148" cy="228" r="2" fill="rgba(0,0,0,0.07)"/>
+                <!-- Tee peg -->
+                <line x1="148" y1="248" x2="148" y2="265" stroke="rgba(230,204,178,0.65)" stroke-width="3" stroke-linecap="round"/>
+                <ellipse cx="148" cy="265" rx="7" ry="3" fill="rgba(176,137,104,0.45)"/>
+            </svg>
+        </div>
+
+        <h1 class="hero-title">CLUB <span>BAIST</span></h1>
+        <p class="hero-subtitle">An exclusive private golf club offering an 18-hole championship experience<br>for members at every level of the game.</p>
+        <div class="d-flex gap-3 mt-4 flex-wrap">
+            <a href="/login" class="btn btn-gold btn-lg px-4">
+                <i class="bi bi-person-badge me-2"></i>Member Sign In
+            </a>
+            <a href="/apply" class="btn btn-outline-gold btn-lg px-4" style="border-color:rgba(221,184,146,0.6); color:var(--cb-gold-light);">
+                Apply for Membership
+            </a>
+            <a class="btn px-4 btn-lg" href="/teesheet" style="background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.25);">
+                <i class="bi bi-calendar3 me-2"></i>View Tee Sheet
+            </a>
         </div>
     </div>
+
+    <!-- Membership tiers -->
+    <div class="row g-3 mb-4">
+        <div class="col-12">
+            <h3 style="font-family:'Playfair Display',serif; color:var(--cb-green-dark);">Membership Levels</h3>
+            <hr class="gold-divider" />
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100" style="border-top:4px solid var(--cb-gold);">
+                <div class="card-body text-center py-3">
+                    <div style="font-size:2rem; color:var(--cb-gold);"><i class="bi bi-award-fill"></i></div>
+                    <h6 style="color:var(--cb-green-dark); font-family:'Playfair Display',serif;">Gold</h6>
+                    <p style="font-size:0.8rem; color:var(--cb-muted);">Shareholder &amp; Associate<br>Anytime access, all privileges</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100" style="border-top:4px solid #aaa;">
+                <div class="card-body text-center py-3">
+                    <div style="font-size:2rem; color:#aaa;"><i class="bi bi-gem"></i></div>
+                    <h6 style="color:var(--cb-green-dark); font-family:'Playfair Display',serif;">Silver</h6>
+                    <p style="font-size:0.8rem; color:var(--cb-muted);">Spouse memberships<br>Before 3 PM or after 5:30 PM</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100" style="border-top:4px solid #cd7f32;">
+                <div class="card-body text-center py-3">
+                    <div style="font-size:2rem; color:#cd7f32;"><i class="bi bi-shield-fill"></i></div>
+                    <h6 style="color:var(--cb-green-dark); font-family:'Playfair Display',serif;">Bronze</h6>
+                    <p style="font-size:0.8rem; color:var(--cb-muted);">Junior &amp; Intermediate<br>Before 3 PM or after 6 PM</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100" style="border-top:4px solid #888;">
+                <div class="card-body text-center py-3">
+                    <div style="font-size:2rem; color:#888;"><i class="bi bi-circle-fill"></i></div>
+                    <h6 style="color:var(--cb-green-dark); font-family:'Playfair Display',serif;">Copper</h6>
+                    <p style="font-size:0.8rem; color:var(--cb-muted);">Social membership<br>No golf privileges</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Course-->
+    <div class="card">
+        <div class="card-header-golf">
+            <h5><i class="bi bi-flag-fill me-2"></i>About the Course</h5>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="stat-value">18</div>
+                        <div class="stat-label">Holes</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card" style="border-left-color:var(--cb-green);">
+                        <div class="stat-value">71/73</div>
+                        <div class="stat-label">Par (Men/Women)</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card" style="border-left-color:#aaa;">
+                        <div class="stat-value">6,442</div>
+                        <div class="stat-label">Yards (Blue Tee)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    /* ── Hero swinging club ── */
+    .hero-golf-anim {
+        position: absolute;
+        right: 2.5rem;
+        bottom: 0;
+        opacity: 0.55;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    .hero-swing-group {
+        transform-box: fill-box;
+        transform-origin: 32px 28px;
+        animation: golf-swing 2.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+    }
+
+    @@keyframes golf-swing {
+        0%   { transform: rotate(-48deg); }
+        35%  { transform: rotate(-48deg); }
+        62%  { transform: rotate(28deg); }
+        72%  { transform: rotate(28deg); }
+        100% { transform: rotate(-48deg); }
+    }
+
+    /* ── Spinning golf ball (dashboard) ── */
+    .spin-ball-wrap {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: -1.2rem;
+        padding-right: 0.5rem;
+    }
+
+    .spin-ball-svg {
+        animation: ball-spin 3.5s linear infinite;
+        filter: drop-shadow(0 2px 6px rgba(127,85,57,0.15));
+    }
+
+    @@keyframes ball-spin {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
+    }
+</style>
+
+@code {
+    private MemberProfile? memberProfile;
+    private List<TeeTimeBooking>? upcomingBookings;
+    int roundsCount = 0;
+    private int bookingsCount = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (UserServ.IsLoggedIn && UserServ.CurrentUser != null)
+        {
+            await using var db = DBFactory.CreateDbContext();
+
+            memberProfile = await db.MemberProfiles
+                .FirstOrDefaultAsync(m => m.UserId == UserServ.CurrentUser.UserId);
+
+            if (memberProfile != null)
+            {
+                DateOnly today = DateOnly.FromDateTime(DateTime.Today);
+                upcomingBookings = await db.TeeTimeBookings
+                    .Where(b => b.MemberProfileId == memberProfile.MemberProfileId
+                                && b.TeeDate >= today
+                                && b.Status == BookingStatus.Confirmed)
+                    .OrderBy(b => b.TeeDate).ThenBy(b => b.TeeTime)
+                    .Take(5)
+                    .ToListAsync();
+
+                roundsCount = await db.PlayerRounds
+                    .CountAsync(r => r.MemberProfileId == memberProfile.MemberProfileId
+                                    && r.RoundDate.Year == DateTime.Now.Year);
+
+                bookingsCount = await db.TeeTimeBookings
+                    .CountAsync(b => b.MemberProfileId == memberProfile.MemberProfileId
+                                     && b.TeeDate.Year == DateTime.Now.Year);
+            }
+            else
+            {
+                upcomingBookings = new();
+            }
+        }
+    }
+
+    private string GetSeasonStatus()
+    {
+        var m = DateTime.Now.Month;
+        return m is >= 3 and <= 9
+            ? "Golf Season Open"
+            : "Golf Season Closed (Mar\u2013Sep)";
+    }
+
+    private string GetTierBadgeClass() => memberProfile?.Tier switch
+    {
+        MembershipTier.Gold   => "status-chip badge-gold",
+        MembershipTier.Silver => "status-chip badge-silver",
+        MembershipTier.Bronze => "status-chip badge-bronze",
+        _                     => "status-chip"
+    };
 }

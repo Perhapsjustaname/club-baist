@@ -1,0 +1,300 @@
+@page "/profile"
+@using ClubBaist.Data
+@using ClubBaist.Models
+@using ClubBaist.Services
+@using Microsoft.EntityFrameworkCore
+@rendermode InteractiveServer
+@inject UserService UserServ
+@inject MemberService MemberSvc
+@inject IDbContextFactory<ClubBaistDbContext> DBFactory
+@inject NavigationManager Nav
+
+<PageTitle>My Profile - Club BAIST</PageTitle>
+
+@if (!UserServ.IsLoggedIn)
+{
+    <div class="alert alert-warning">Please <a href="/login">sign in</a> to view your profile.</div>
+}
+else if (memberProfile == null)
+{
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle-fill me-2"></i>
+        No member profile is linked to your account yet. Please contact the pro shop at <strong>(780) 655-7744</strong>.
+    </div>
+}
+else
+{
+    <div class="page-header">
+        <div>
+            <h1 class="page-header-title">@memberProfile.FullName</h1>
+            <p class="page-header-sub">Member since @memberProfile.MemberSince.Year &bull; #@memberProfile.MemberNumber</p>
+        </div>
+        <div class="d-flex gap-2">
+            <span class="status-chip @TierBadge()">@memberProfile.Tier @memberProfile.MemberType</span>
+            <span class="status-chip @StatusBadge()">@memberProfile.Status</span>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Left: handicap + account -->
+        <div class="col-md-4">
+            <div class="handicap-index-card mb-3">
+                <div class="handicap-label">WHS Handicap Index</div>
+                <div class="handicap-number">@(memberProfile.HandicapIndex?.ToString("F1") ?? "—")</div>
+                <div class="handicap-label mt-1">Golf Canada &bull; World Handicap System</div>
+            </div>
+
+            <!-- Balances -->
+            <div class="card mb-3">
+                <div class="card-header-golf"><h5><i class="bi bi-credit-card-fill me-2"></i>Account Balances</h5></div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                        <span style="font-size:0.88rem;">Annual Fee</span>
+                        <span class="fw-bold @(memberProfile.AnnualFeeBalance > 0 ? "text-danger" : "text-success")">
+                            @(memberProfile.AnnualFeeBalance > 0 ? "$" + memberProfile.AnnualFeeBalance.ToString("N2") + " owing" : "Paid")
+                        </span>
+                    </div>
+                    @if (memberProfile.EntranceFeeBalance > 0)
+                    {
+                        <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                            <span style="font-size:0.88rem;">Entrance Fee</span>
+                            <span class="fw-bold text-danger">$@memberProfile.EntranceFeeBalance.ToString("N2") owing</span>
+                        </div>
+                    }
+                    @if (memberProfile.Tier == MembershipTier.Gold)
+                    {
+                        <div class="d-flex justify-content-between align-items-center py-2">
+                            <span style="font-size:0.88rem;">F&amp;B Minimum</span>
+                            <span class="fw-bold @(memberProfile.FoodBeverageBalance > 0 ? "text-danger" : "text-success")">
+                                @(memberProfile.FoodBeverageBalance > 0 ? $"${memberProfile.FoodBeverageBalance:N2} owing" : "Met")
+                            </span>
+                        </div>
+                    }
+
+                    <div class="mt-3 p-2 rounded" style="background:var(--cb-cream); font-size:0.78rem; color:var(--cb-muted);">
+                        Annual fee: $@MemberService.GetAnnualFee(memberProfile.Tier, memberProfile.MemberType).ToString("N2")
+                        — due April 1 each year (10% late penalty applies).
+                    </div>
+                </div>
+            </div>
+
+            <!-- Membership -->
+            <div class="card">
+                <div class="card-header-golf"><h5><i class="bi bi-card-list me-2"></i>Membership</h5></div>
+                <div class="card-body" style="font-size:0.88rem;">
+                    <div class="d-flex justify-content-between py-1 border-bottom">
+                        <span style="color:var(--cb-muted);">Member #</span>
+                        <span class="fw-semibold">@memberProfile.MemberNumber</span>
+                    </div>
+                    <div class="d-flex justify-content-between py-1 border-bottom">
+                        <span style="color:var(--cb-muted);">Level</span>
+                        <span class="fw-semibold">@memberProfile.Tier</span>
+                    </div>
+                    <div class="d-flex justify-content-between py-1 border-bottom">
+                        <span style="color:var(--cb-muted);">Type</span>
+                        <span class="fw-semibold">@memberProfile.MemberType</span>
+                    </div>
+                    <div class="d-flex justify-content-between py-1 border-bottom">
+                        <span style="color:var(--cb-muted);">Status</span>
+                        <span class="fw-semibold">@memberProfile.Status</span>
+                    </div>
+                    <div class="d-flex justify-content-between py-1">
+                        <span style="color:var(--cb-muted);">Member Since</span>
+                        <span class="fw-semibold">@memberProfile.MemberSince.Year</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Personal info (editable) -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header-golf d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-person-fill me-2"></i>Personal Information</h5>
+                    @if (!editMode)
+                    {
+                        <button class="btn btn-sm btn-outline-gold" @onclick="() => editMode = true">
+                            <i class="bi bi-pencil-fill me-1"></i>Edit
+                        </button>
+                    }
+                </div>
+                <div class="card-body">
+                    @if (saveSuccess)
+                    {
+                        <div class="alert alert-success py-2">
+                            <i class="bi bi-check-circle-fill me-2"></i>Profile updated successfully.
+                        </div>
+                    }
+
+                    @if (!editMode)
+                    {
+                        <!-- View mode -->
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--cb-muted);">First Name</div>
+                                <div style="font-weight:500;">@memberProfile.FirstName</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--cb-muted);">Last Name</div>
+                                <div style="font-weight:500;">@memberProfile.LastName</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--cb-muted);">Email</div>
+                                <div style="font-weight:500;">@memberProfile.User?.Email</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--cb-muted);">Phone</div>
+                                <div style="font-weight:500;">@(memberProfile.Phone ?? "—")</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--cb-muted);">Date of Birth</div>
+                                <div style="font-weight:500;">@(memberProfile.DateOfBirth?.ToString("MMMM d, yyyy") ?? "—")</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--cb-muted);">Occupation</div>
+                                <div style="font-weight:500;">@(memberProfile.Occupation ?? "—")</div>
+                            </div>
+                            <div class="col-12">
+                                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--cb-muted);">Address</div>
+                                <div style="font-weight:500;">@(memberProfile.Address ?? "—") @(memberProfile.PostalCode ?? "")</div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Edit mode -->
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">First Name</label>
+                                <input class="form-control" @bind="editFirst" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Last Name</label>
+                                <input class="form-control" @bind="editLast" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Phone</label>
+                                <input class="form-control" @bind="editPhone" placeholder="(403) 555-0000" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Alternate Phone</label>
+                                <input class="form-control" @bind="editAltPhone" />
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label">Address</label>
+                                <input class="form-control" @bind="editAddress" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Postal Code</label>
+                                <input class="form-control" @bind="editPostal" placeholder="T2P 0A1" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Occupation</label>
+                                <input class="form-control" @bind="editOccupation" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Company Name</label>
+                                <input class="form-control" @bind="editCompany" />
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2 mt-3">
+                            <button class="btn btn-gold px-4" @onclick="SaveProfile">
+                                <i class="bi bi-check-lg me-1"></i>Save Changes
+                            </button>
+                            <button class="btn btn-outline-green px-4" @onclick="CancelEdit">
+                                Cancel
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private MemberProfile? memberProfile;
+    // editMode toggles between view and edit - simple bool, no wierd state machine needed here
+    private bool editMode   = false;
+    private bool saveSuccess = false;
+
+    // Edit fields
+    private string editFirst = "", editLast = "", editPhone = "", editAltPhone = "";
+    string editAddress = "", editPostal = "", editOccupation = "", editCompany = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserServ.IsLoggedIn) return;
+
+        await using var db = DBFactory.CreateDbContext();
+        memberProfile = await db.MemberProfiles
+            .Include(m => m.User)
+            .FirstOrDefaultAsync(m => m.UserId == UserServ.CurrentUser!.UserId);
+    }
+
+    private void StartEdit()
+    {
+        if (memberProfile == null) return;
+        editFirst      = memberProfile.FirstName;
+        editLast       = memberProfile.LastName;
+        editPhone      = memberProfile.Phone ?? "";
+        editAltPhone   = memberProfile.AlternatePhone ?? "";
+        editAddress    = memberProfile.Address ?? "";
+        editPostal     = memberProfile.PostalCode ?? "";
+        editOccupation = memberProfile.Occupation ?? "";
+        editCompany    = memberProfile.CompanyName ?? "";
+        editMode = true;
+    }
+
+    // OnParametersSet fires whenever the component reloads, fills edit fields from the current profile
+    protected override void OnParametersSet()
+    {
+        if (memberProfile != null) StartEdit();
+    }
+
+    private async Task SaveProfile()
+    {
+        if (memberProfile == null) return;
+
+        memberProfile.FirstName    = editFirst.Trim();
+        memberProfile.LastName     = editLast.Trim();
+        memberProfile.Phone        = editPhone.Trim();
+        memberProfile.AlternatePhone = editAltPhone.Trim();
+        memberProfile.Address      = editAddress.Trim();
+        memberProfile.PostalCode   = editPostal.Trim();
+        memberProfile.Occupation   = editOccupation.Trim();
+        memberProfile.CompanyName  = editCompany.Trim();
+
+        // have to use Update() bc the entity was loaded in a different context. its detached here
+        await using var db = DBFactory.CreateDbContext();
+        db.MemberProfiles.Update(memberProfile);
+        await db.SaveChangesAsync();
+        saveSuccess = true;
+        editMode = false;
+
+        // auto clear success message after 3 sec
+        await Task.Delay(3000);
+        saveSuccess = false;
+    }
+
+    private void CancelEdit()
+    {
+        editMode    = false;
+        saveSuccess = false;
+    }
+
+    private string TierBadge() => memberProfile?.Tier switch
+    {
+        MembershipTier.Gold   => "status-chip badge-gold",
+        MembershipTier.Silver => "status-chip badge-silver",
+        MembershipTier.Bronze => "status-chip badge-bronze",
+        _                     => "status-chip"
+    };
+
+    private string StatusBadge() => memberProfile?.Status switch
+    {
+        MemberStatus.Active    => "status-chip badge-green",
+        MemberStatus.Suspended => "status-chip bg-danger text-white",
+        _                      => "status-chip badge-silver"
+    };
+}

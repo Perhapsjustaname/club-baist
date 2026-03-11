@@ -3,90 +3,142 @@
 @using ClubBaist.Models
 @using ClubBaist.Services
 @using Microsoft.EntityFrameworkCore
-
 @rendermode InteractiveServer
-@inject ClubBaistDbContext DB
+@inject IDbContextFactory<ClubBaistDbContext> DBFactory
 @inject NavigationManager Nav
 @inject UserService UserServ
+@* full screen auth page, no sidebar ,uses EmptyLayout so the nav doesnt show *@
+@layout ClubBaist.Components.Layout.EmptyLayout
 
-<PageTitle>Login - CLUB-BAIST</PageTitle>
+<PageTitle>Sign In — Club BAIST</PageTitle>
 
-<div class="row justify-content-center mt-5">
-    <div class="col-md-4 border p-4 shadow-sm bg-white">
-        <h3 class="mb-3 text-center">Login</h3>
-        
-        @if (!string.IsNullOrEmpty(errorMessage))
-        {
-            <div class="alert alert-danger">@errorMessage</div>
-        }
-        @if (showSuccessMessage)
-{
-    <div class="alert alert-success animate-fade-out">
-        <strong>Success!</strong> Welcome back, @UserServ.CurrentUser?.Username. Redirecting...
+<div class="auth-page">
+    <!-- Left panel branding -->
+    <div class="auth-panel-left">
+        <div class="text-center">
+            <div style='font-size:4rem; color:var(--cb-gold); margin-bottom:1rem;'><i class="bi bi-flag-fill"></i></div>
+            <div class="auth-brand-name">CLUB <span>BAIST</span></div>
+            <div class="auth-brand-tagline">Founded 1970 &bull; 18 Holes</div>
+
+            <div class="mt-5" style="max-width:320px; margin:3rem auto 0;">
+                <div class="d-flex flex-column gap-3">
+                    <div class="d-flex align-items-center gap-3" style="color:rgba(255,255,255,0.65); font-size:0.88rem;">
+                        <i class="bi bi-check-circle-fill text-gold" style="color:var(--cb-gold);"></i>
+                        Award-winning 18-hole championship course
+                    </div>
+                    <div class="d-flex align-items-center gap-3" style="color:rgba(255,255,255,0.65); font-size:0.88rem;">
+                        <i class="bi bi-check-circle-fill" style="color:var(--cb-gold);"></i>
+                        Online tee time booking for all members
+                    </div>
+                    <div class="d-flex align-items-center gap-3" style="color:rgba(255,255,255,0.65); font-size:0.88rem;">
+                        <i class="bi bi-check-circle-fill" style="color:var(--cb-gold);"></i>
+                        WHS handicap tracking via Golf Canada
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-}
 
-        <div class="mb-3">
-            <label class="form-label">Email</label>
-            <input type="email" class="form-control" @bind="email" @bind:event="oninput" placeholder="name@example.com" />
-        </div>
-        
-        <div class="mb-3">
-            <label class="form-label">Password</label>
-            <input type="password" class="form-control" @bind="password" @bind:event="oninput" placeholder="••••••••" @onkeyup="HandleKeyUp" />
-        </div>
+    <!-- Right panel form -->
+    <div class="auth-panel-right">
+        <div style="max-width:360px; width:100%;">
+            <div style='font-size:2rem; color:var(--cb-gold); margin-bottom:1rem;'><i class="bi bi-flag-fill"></i></div>
+            <h2 class="auth-form-title">Welcome Back</h2>
+            <p class="auth-form-subtitle">Sign in to your Club BAIST member account</p>
 
-        <button class="btn btn-success w-100" @onclick="HandleLogin">Sign In</button>
-        
-        <div class="mt-3 text-center">
-            <small>New here? <a href="/register">Create an account</a></small>
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger mb-3">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+                </div>
+            }
+
+            @if (showSuccess)
+            {
+                <div class="alert alert-success mb-3">
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                    Welcome back, @UserServ.CurrentUser?.Username! Redirecting...
+                </div>
+            }
+
+            <div class="mb-3">
+                <label class="form-label">Email Address</label>
+                <input @bind="email" type="email" class="form-control"
+                       placeholder="your@email.com" @bind:event="oninput" @onkeyup="HandleKeyUp" />
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label">Password</label>
+                <!-- onkeyup on both fields so enter key works no matter which one is focused -->
+                <input type="password" class="form-control" @bind="password" @bind:event="oninput"
+                       @onkeyup="HandleKeyUp" placeholder="••••••••" />
+            </div>
+
+            <button class="btn btn-gold w-100 py-2" disabled="@isLoading" @onclick="HandleLogin">
+                @if (isLoading)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                }
+                <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+            </button>
+
+            <div class="mt-4 text-center" style="font-size:0.85rem;">
+                <span style="color:var(--cb-muted);">New to Club BAIST? </span>
+                <a href="/apply" class="fw-semibold" style="color:var(--cb-green);">Apply for Membership</a>
+            </div>
+            <div class="text-center mt-2" style="font-size:0.82rem;">
+                <a href="/" style="color:var(--cb-muted);">Return to home</a>
+            </div>
         </div>
     </div>
 </div>
 
 @code {
-    private string email = "";
-    private string password = "";
+    string email = "";
+    string password = "";
     private string errorMessage = "";
+    private bool showSuccess = false;
+    bool isLoading = false;
 
+    // enter key submits the form 
     private async Task HandleKeyUp(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter")
-        {
-            await HandleLogin();
-        }
+        if (e.Key == "Enter") await HandleLogin();
     }
 
-    private bool showSuccessMessage = false;
-
-private async Task HandleLogin()
-{
-    errorMessage = "";
-    
-    try 
+    private async Task HandleLogin()
     {
-        var user = await DB.Users.FirstOrDefaultAsync(u => u.Email == email);
+        if (isLoading) return;
+        errorMessage = "";
+        isLoading = true;
 
-        if (user != null && BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+        try
         {
-            UserServ.Login(user);
-            showSuccessMessage = true;
-            
-            StateHasChanged(); 
+            await using var db = DBFactory.CreateDbContext();
+            var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
 
-            //  3 seconds then go to home
-            await Task.Delay(3000);
-            Nav.NavigateTo("/");
+            // BCrypt.Verify compares plain password against the stored hash
+            // short delay before redirect so user actually sees the success message for psycology purposes
+            if (user != null && BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
+            {
+                UserServ.Login(user);
+                showSuccess = true;
+                StateHasChanged();
+                await Task.Delay(1000);
+                Nav.NavigateTo("/");
+            }
+            else
+            {
+                errorMessage = "Invalid email address or password. Please try again.";
+            }
         }
-        else
+        catch
         {
-            errorMessage = "Invalid email or password.";
+            errorMessage = "Unable to connect. Please try again.";
+        }
+        finally
+        {
+            isLoading = false;
         }
     }
-    catch (Exception ex) 
-    {
-        errorMessage = "Database connection error.";
-    }
-    
-}
 }

@@ -1,0 +1,259 @@
+@page "/teesheet"
+@using ClubBaist.Data
+@using ClubBaist.Models
+@using ClubBaist.Services
+@using Microsoft.EntityFrameworkCore
+@rendermode InteractiveServer
+@inject TeeTimeService TeeTimeSvc
+@inject UserService UserServ
+@inject IDbContextFactory<ClubBaistDbContext> DBFactory
+@inject AuditService AuditSvc
+
+@* public page, no login needed to view, anyone can see the tee sheet *@
+<PageTitle>Daily Tee Sheet - Club BAIST</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-header-title">Daily Tee Sheet</h1>
+        <p class="page-header-sub">@viewDate.ToString("dddd, MMMM d, yyyy")</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <button @onclick="PrevDay" class="btn btn-outline-green btn-sm">
+            <i class="bi bi-chevron-left"></i>
+        </button>
+        <input type="date" class="form-control form-control-sm"
+               style="width:160px;"
+               value="@viewDate.ToString("yyyy-MM-dd")"
+               @onchange="OnDateChanged" />
+        <button class="btn btn-outline-green btn-sm" @onclick="NextDay">
+            <i class="bi bi-chevron-right"></i>
+        </button>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(actionMsg))
+{
+    <div class="alert @(actionSuccess ? "alert-success" : "alert-danger") py-2 mb-3">
+        <i class="bi @(actionSuccess ? "bi-check-circle-fill" : "bi-exclamation-triangle-fill") me-2"></i>@actionMsg
+    </div>
+}
+
+<!-- Summary  -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="stat-card">
+            <div class="stat-value">@bookings.Count(b => b.Status == BookingStatus.Confirmed)</div>
+            <div class="stat-label">Tee Times Booked</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card" style="border-left-color:var(--cb-green);">
+            <div class="stat-value">@bookings.Where(b => b.Status == BookingStatus.Confirmed).Sum(b => b.NumberOfPlayers)</div>
+            <div class="stat-label">Players Today</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card" style="border-left-color:#aaa;">
+            <div class="stat-value">@allSlots.Count(s => !bookings.Any(b => b.TeeTime == s && b.Status == BookingStatus.Confirmed))</div>
+            <div class="stat-label">Slots Available</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card" style="border-left-color:var(--cb-gold);">
+            <div class="stat-value">@(TeeTimeSvc.IsInSeason(viewDate) ? "Open" : "Closed")</div>
+            <div class="stat-label">Season Status</div>
+        </div>
+    </div>
+</div>
+
+<!-- Tee sheet -->
+<div class="card">
+    <div class="card-header-golf d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Tee Times — @viewDate.ToString("MMM d, yyyy")</h5>
+        <span style="font-size:0.75rem; color:rgba(255,255,255,0.55);">
+            @viewDate.DayOfWeek &bull; 7:00 AM – 6:30 PM &bull; 8-min intervals
+        </span>
+    </div>
+    <div class="card-body p-0">
+        @if (isLoading)
+        {
+            <div class="text-center py-5">
+                <div class="spinner-border" role="status" style="color:var(--cb-green);"></div>
+                <p class="mt-3 text-muted">Loading tee sheet...</p>
+            </div>
+        }
+        else
+        {
+            <div style="max-height:65vh; overflow-y:auto;">
+                @foreach (var slot in allSlots)
+                {
+                    var booking = bookings.FirstOrDefault(b => b.TeeTime == slot && b.Status == BookingStatus.Confirmed);
+                    <div class="tee-sheet-row @(booking != null ? "booked" : "") px-3">
+
+                        <!-- Time -->
+                        <div class="tee-sheet-time">@slot.ToString("h:mm tt")</div>
+
+                        <!-- first name visible to everyone, last name + member# only to admin/staff -->
+                        <div class="tee-sheet-member flex-grow-1 px-2">
+                            @if (booking != null)
+                            {
+                                <div style="font-weight:600; font-size:0.9rem;">
+                                    @booking.MemberProfile.FirstName
+                                    @if (IsAdminOrStaff())
+                                    {
+                                        <span style="font-weight:400; color:var(--cb-muted); font-size:0.8rem;">
+                                            @booking.MemberProfile.LastName
+                                            <span class="ms-1">(#@booking.MemberProfile.MemberNumber)</span>
+                                        </span>
+                                    }
+                                </div>
+                                <div style="font-size:0.78rem; color:var(--cb-muted);">
+                                    @booking.NumberOfPlayers player@(booking.NumberOfPlayers > 1 ? "s" : "")
+                                    @* player names + cart details only shown if logged in *@
+                                    @if (IsLoggedIn())
+                                    {
+                                        @if (!string.IsNullOrEmpty(booking.Player2Name)) { <span> · @booking.Player2Name</span> }
+                                        @if (!string.IsNullOrEmpty(booking.Player3Name)) { <span> · @booking.Player3Name</span> }
+                                        @if (!string.IsNullOrEmpty(booking.Player4Name)) { <span> · @booking.Player4Name</span> }
+                                        @if (booking.NumberOfCarts > 0) { <span class="ms-2"><i class="bi bi-car-front-fill"></i> @booking.NumberOfCarts cart@(booking.NumberOfCarts > 1 ? "s" : "")</span> }
+                                        @if (booking.IsStanding) { <span class="ms-2 badge badge-gold px-2">Standing</span> }
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <span class="tee-slot-available">— Available —</span>
+                            }
+                        </div>
+
+                        <!-- Status / actiosn -->
+                        <div class="d-flex align-items-center gap-1 justify-content-end" style="min-width:160px;">
+                            @if (booking != null)
+                            {
+                                @if (booking.CheckedIn)
+                                {
+                                    <span class="status-chip badge-green"><i class="bi bi-check-circle-fill me-1"></i>Checked In</span>
+                                }
+                                else
+                                {
+                                    <span class="status-chip badge-silver">Confirmed</span>
+                                    @* check in and cancel buttons only for admin/staff ,regular members cant touch other peoples bookings here *@
+                                    @if (IsAdminOrStaff())
+                                    {
+                                        <button class="btn btn-sm btn-outline-green"
+                                                style="font-size:0.72rem;"
+                                                @onclick="() => CheckIn(booking.BookingId)">
+                                            <i class="bi bi-check2"></i> Check In
+                                        </button>
+                                        <button style="font-size:0.72rem;"
+                                                class="btn btn-sm btn-outline-danger"
+                                                @onclick="() => StaffCancel(booking.BookingId)">
+                                            <i class="bi bi-x"></i> Cancel
+                                        </button>
+                                    }
+                                }
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    DateOnly viewDate = DateOnly.FromDateTime(DateTime.Today);
+    private List<TimeOnly> allSlots = new();
+    private List<TeeTimeBooking> bookings = new();
+    private bool isLoading = true;
+    string actionMsg = "";
+    private bool actionSuccess = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        allSlots = TeeTimeSvc.GetAllSlots();
+        await LoadBookings();
+    }
+
+    private async Task LoadBookings()
+    {
+        isLoading = true;
+        bookings = await TeeTimeSvc.GetBookingsForDateAsync(viewDate);
+        isLoading = false;
+    }
+
+    private async Task OnDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            viewDate = d;
+            await LoadBookings();
+        }
+    }
+
+    private async Task PrevDay()
+    {
+        viewDate = viewDate.AddDays(-1);
+        await LoadBookings();
+    }
+
+    private async Task NextDay()
+    {
+        viewDate = viewDate.AddDays(1);
+        await LoadBookings();
+    }
+
+    private async Task CheckIn(int bookingId)
+    {
+        await using var db = DBFactory.CreateDbContext();
+        var b = await db.TeeTimeBookings.FindAsync(bookingId);
+        if (b != null)
+        {
+            b.CheckedIn = true;
+            b.CheckedInAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            await AuditSvc.LogAsync(
+                UserServ.CurrentUser!.Username,
+                "CheckIn",
+                "Booking",
+                bookingId,
+                "Checked in booking for " + viewDate.ToString("MMM d, yyyy") + " at " + b.TeeTime.ToString("h:mm tt")
+            );
+            await ShowMessage("Player checked in successfully.", true);
+            await LoadBookings();
+        }
+    }
+
+    private async Task StaffCancel(int bookingId)
+    {
+        bool ok = await TeeTimeSvc.AdminCancelBookingAsync(bookingId);
+        if (ok)
+        {
+            await AuditSvc.LogAsync(
+                UserServ.CurrentUser!.Username,
+                "CancelBooking",
+                "Booking",
+                bookingId,
+                "Staff cancelled booking on " + viewDate.ToString("MMM d, yyyy")
+            );
+        }
+        await ShowMessage(ok ? "Booking cancelled." : "Could not cancel that booking.", ok);
+        await LoadBookings();
+    }
+
+    // auto clears after 3 seconds, dont want old success messages lingering on screen
+    private async Task ShowMessage(string msg, bool success)
+    {
+        actionMsg = msg;
+        actionSuccess = success;
+        StateHasChanged();
+        await Task.Delay(3000);
+        actionMsg = "";
+        StateHasChanged();
+    }
+
+    private bool IsAdminOrStaff() =>
+        UserServ.CurrentUser?.Role is "Admin" or "Staff";
+
+    private bool IsLoggedIn() => UserServ.IsLoggedIn;
+}

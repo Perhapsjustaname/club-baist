@@ -1,0 +1,340 @@
+@page "/admin/members"
+@using ClubBaist.Data
+@using ClubBaist.Models
+@using ClubBaist.Services
+@using Microsoft.EntityFrameworkCore
+@rendermode InteractiveServer
+@inject UserService UserServ
+@inject MemberService MemberSvc
+@inject IDbContextFactory<ClubBaistDbContext> DBFactory
+@inject AuditService AuditSvc
+
+<PageTitle>Member Management — Club BAIST Admin</PageTitle>
+
+@if (!IsAuthorized())
+{
+    <div class="alert alert-danger">
+        <i class="bi bi-lock-fill me-2"></i>Access denied. Admin or Staff role required.
+    </div>
+}
+else
+{
+    <div class="page-header">
+        <div>
+            <h1 class="page-header-title">Member Management</h1>
+            <p class="page-header-sub">@members.Count total members · Admin Panel</p>
+        </div>
+        <button class="btn btn-gold" @onclick="() => showCreateForm = !showCreateForm">
+            <i class="bi bi-plus-lg me-2"></i>@(showCreateForm ? "Cancel" : "Add Member")
+        </button>
+    </div>
+
+    <!-- Summary  -->
+    <div class="row g-3 mb-4">
+        @foreach (var tier in Enum.GetValues<MembershipTier>())
+        {
+            var count = members.Count(m => m.Tier == tier);
+            <div class="col-md-3">
+                <div class="stat-card" style="border-left-color:@TierColor(tier);">
+                    <div class="stat-value">@count</div>
+                    <div class="stat-label">@tier Members</div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Create member -->
+    @if (showCreateForm)
+    {
+        <div class="card mb-4">
+            <div class="card-header-golf">
+                <h5><i class="bi bi-person-plus-fill me-2"></i>Link Member Profile to User Account</h5>
+            </div>
+            <div class="card-body">
+                @if (!string.IsNullOrEmpty(createMsg))
+                {
+                    <div class="alert @(createSuccess ? "alert-success" : "alert-danger") py-2">@createMsg</div>
+                }
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">User Email *</label>
+                        <input class="form-control" @bind="newUserEmail" placeholder="user@email.com" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">First Name *</label>
+                        <input class="form-control" @bind="newFirst" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Last Name *</label>
+                        <input class="form-control" @bind="newLast" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Tier *</label>
+                        <select class="form-select" @bind="newTier">
+                            @foreach (var t in Enum.GetValues<MembershipTier>()) {
+                                <option value="@t">@t</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Type *</label>
+                        <select @bind="newType" class="form-select">
+                            @foreach (var t in Enum.GetValues<MembershipType>()) {
+                                <option value="@t">@t</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Phone</label>
+                        <input class="form-control" @bind="newPhone" placeholder="(403) 555-0000" />
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-gold px-4" disabled="@isCreating" @onclick="CreateMember">
+                        @if (isCreating) { <span class="spinner-border spinner-border-sm me-2"></span> }
+                        <i class="bi bi-save-fill me-2"></i>Create Profile
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Search -->
+    <div class="card mb-3">
+        <div class="card-body py-2">
+            <div class="row align-items-center">
+                <div class="col-md-4">
+                    <input class="form-control" @bind="searchTerm" placeholder="Search by name or member #..." @bind:event="oninput" />
+                </div>
+                <div class="col-md-2">
+                    <select class="form-select" @bind="filterTier">
+                        <option value="">All Tiers</option>
+                        @foreach (var t in Enum.GetValues<MembershipTier>()) {
+                            <option value="@t">@t</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <select @bind="filterStatus" class="form-select">
+                        <option value="">All Statuses</option>
+                        @foreach (var s in Enum.GetValues<MemberStatus>()) {
+                            <option value="@s">@s</option>
+                        }
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Members table -->
+    <div class="card">
+        <div class="card-body p-0">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>Member #</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Tier / Type</th>
+                        <th>Handicap</th>
+                        <th>Status</th>
+                        <th>Since</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in FilteredMembers())
+                    {
+                        <tr>
+                            <td style="font-family:monospace; font-size:0.82rem;">@m.MemberNumber</td>
+                            <td>
+                                <div style="font-weight:600;">@m.FullName</div>
+                                <div style="font-size:0.75rem; color:var(--cb-muted);">@m.Phone</div>
+                            </td>
+                            <td style="font-size:0.82rem;">@m.User?.Email</td>
+                            <td>
+                                <span class="status-chip @TierBadge(m.Tier)" style="font-size:0.72rem;">@m.Tier</span>
+                                <div style="font-size:0.75rem; color:var(--cb-muted); margin-top:2px;">@m.MemberType</div>
+                            </td>
+                            <td style="font-weight:700; color:var(--cb-green-dark);">
+                                @(m.HandicapIndex != null ? m.HandicapIndex.Value.ToString("F1") : "—")
+                            </td>
+                            <td>
+                                <span class="status-chip @(m.Status == MemberStatus.Active ? "badge-green" : "badge-silver")" style="font-size:0.72rem;">
+                                    @m.Status
+                                </span>
+                            </td>
+                            <td style="font-size:0.82rem;">@m.MemberSince.Year</td>
+                            <td>
+                                <div class="d-flex gap-1">
+                                    @if (m.Status == MemberStatus.Active)
+                                    {
+                                        <button class="btn btn-sm btn-outline-danger" style="font-size:0.72rem;"
+                                                @onclick="() => SuspendMember(m.MemberProfileId)">
+                                            Suspend
+                                        </button>
+                                    }
+                                    else if (m.Status == MemberStatus.Suspended)
+                                    {
+                                        <button class="btn btn-sm btn-outline-success"
+                                                style="font-size:0.72rem;"
+                                                @onclick="() => ActivateMember(m.MemberProfileId)">
+                                            Activate
+                                        </button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private List<MemberProfile> members = new();
+    bool showCreateForm = false;
+    private bool isCreating = false;
+    string createMsg = "";
+    private bool createSuccess = false;
+
+    private string searchTerm  = "";
+    private string filterTier  = "";
+    private string filterStatus = "";
+
+    // Create form fields
+    private string newUserEmail = "", newFirst = "", newLast = "", newPhone = "";
+    MembershipTier newTier     = MembershipTier.Gold;
+    private MembershipType newType = MembershipType.Shareholder;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMembers();
+    }
+
+    private async Task LoadMembers()
+    {
+        members = await MemberSvc.GetAllMembersAsync();
+    }
+
+    // client-side filter - member list is small so no need to hit the db again each keystroke
+    private IEnumerable<MemberProfile> FilteredMembers()
+    {
+        var q = members.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            string term = searchTerm.ToLower();
+            q = q.Where(m => m.FullName.ToLower().Contains(term)
+                          || m.MemberNumber.ToLower().Contains(term));
+        }
+
+        if (!string.IsNullOrEmpty(filterTier) && Enum.TryParse<MembershipTier>(filterTier, out var tier))
+            q = q.Where(m => m.Tier == tier);
+
+        if (!string.IsNullOrEmpty(filterStatus) && Enum.TryParse<MemberStatus>(filterStatus, out var status))
+            q = q.Where(m => m.Status == status);
+
+        return q;
+    }
+
+    private async Task CreateMember()
+    {
+        createMsg = "";
+        if (string.IsNullOrWhiteSpace(newUserEmail) ||
+            string.IsNullOrWhiteSpace(newFirst) ||
+            string.IsNullOrWhiteSpace(newLast))
+        {
+            createMsg = "Email, first name, and last name are required.";
+            createSuccess = false;
+            return;
+        }
+
+        isCreating = true;
+        await using var db = DBFactory.CreateDbContext();
+        // user has to register an account first, then admin links the profile to it
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Email == newUserEmail.Trim().ToLower());
+        if (user == null)
+        {
+            createMsg     = "No user account found with that email. Ask the member to register first.";
+            createSuccess = false;
+            isCreating    = false;
+            return;
+        }
+
+        bool existing = await db.MemberProfiles.AnyAsync(m => m.UserId == user.UserId);
+        if (existing)
+        {
+            createMsg     = "This user already has a member profile.";
+            createSuccess = false;
+            isCreating    = false;
+            return;
+        }
+
+        // must update user.Role to match tier so login session gets the right role immediately
+        user.Role = newTier.ToString();
+        db.Users.Update(user);
+        await db.SaveChangesAsync();
+        var newProfile = await MemberSvc.CreateMemberAsync(user.UserId, newFirst.Trim(), newLast.Trim(), newTier, newType, newPhone.Trim());
+        await AuditSvc.LogAsync(
+            UserServ.CurrentUser!.Username,
+            "CreateMember",
+            "MemberProfile",
+            newProfile.MemberProfileId,
+            "Created " + newTier + " " + newType + " profile for " + newFirst.Trim() + " " + newLast.Trim() + " (" + newUserEmail.Trim() + ")"
+        );
+
+        createMsg     = "Member profile created for " + newFirst + " " + newLast + ".";
+        createSuccess = true;
+        newUserEmail  = newFirst = newLast = newPhone = "";
+        await LoadMembers();
+        isCreating = false;
+    }
+
+    // just flips the status flag - service checks this on every booking attempt
+    private async Task SuspendMember(int id)
+    {
+        await using var db = DBFactory.CreateDbContext();
+        var m = await db.MemberProfiles.FindAsync(id);
+        if (m != null)
+        {
+            m.Status = MemberStatus.Suspended;
+            await db.SaveChangesAsync();
+            await AuditSvc.LogAsync(UserServ.CurrentUser!.Username, "SuspendMember", "MemberProfile", id, "Suspended member " + m.FullName);
+            await LoadMembers();
+        }
+    }
+
+    private async Task ActivateMember(int id)
+    {
+        await using var db = DBFactory.CreateDbContext();
+        var m = await db.MemberProfiles.FindAsync(id);
+        if (m != null)
+        {
+            m.Status = MemberStatus.Active;
+            await db.SaveChangesAsync();
+            await AuditSvc.LogAsync(UserServ.CurrentUser!.Username, "ActivateMember", "MemberProfile", id, "Reactivated member " + m.FullName);
+            await LoadMembers();
+        }
+    }
+
+    // both Admin and Staff can access this page - Staff cant do everything but can see members
+    private bool IsAuthorized() => UserServ.CurrentUser?.Role is "Admin" or "Staff";
+
+    private string TierBadge(MembershipTier t) => t switch
+    {
+        MembershipTier.Gold   => "badge-gold",
+        MembershipTier.Silver => "badge-silver",
+        MembershipTier.Bronze => "badge-bronze",
+        _                     => "badge-silver"
+    };
+
+    private string TierColor(MembershipTier t) => t switch
+    {
+        MembershipTier.Gold   => "var(--cb-gold)",
+        MembershipTier.Silver => "#aaa",
+        MembershipTier.Bronze => "#cd7f32",
+        _                     => "#888"
+    };
+}

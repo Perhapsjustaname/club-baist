@@ -1,67 +1,178 @@
 ﻿@using ClubBaist.Services
+@using ClubBaist.Data
+@using ClubBaist.Models
+@using Microsoft.EntityFrameworkCore
 @inject UserService UserServ
 @inject NavigationManager Nav
+@inject IDbContextFactory<ClubBaistDbContext> DBFactory
+@implements IDisposable
 
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">Club Baist</a>
-    </div>
+<!-- brand -->
+<div class="sidebar-brand">
+    <span class="sidebar-brand-crest"><i class="bi bi-flag-fill"></i></span>
+    <span class="sidebar-brand-title">CLUB BAIST</span>
+    <span class="sidebar-brand-sub">Founded 1970</span>
 </div>
 
+<!-- nav -->
 <div class="nav-scrollable">
     <nav class="flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill"></span> Home
+
+        <span class="nav-section-label">Main</span>
+
+        <div class="nav-item">
+            <NavLink href="" class="nav-link" Match="NavLinkMatch.All">
+                <i class="bi bi-house-door-fill"></i> <span>Dashboard</span>
             </NavLink>
         </div>
 
-     
         @if (UserServ.IsLoggedIn)
         {
-            <div class="nav-item px-3">
-                <span class="nav-link text-white">
-                    <span class="bi bi-person-circle"></span> @UserServ.CurrentUser?.Username
-                </span>
+            <span class="nav-section-label">Golf</span>
+
+            <div class="nav-item">
+                <NavLink class="nav-link" href="bookings">
+                    <i class="bi bi-calendar-plus-fill"></i> <span>Book Tee Time</span>
+                </NavLink>
             </div>
-            <div class="nav-item px-3">
-                
-                <button class="btn btn-link nav-link w-100 text-start text-white" @onclick="HandleLogout">
-                    <span class="bi bi-box-arrow-right"></span> Logout
-                </button>
+
+            <div class="nav-item">
+                <NavLink href="teesheet" class="nav-link">
+                    <i class="bi bi-calendar3"></i> <span>Tee Sheet</span>
+                </NavLink>
             </div>
+
+            <div class="nav-item">
+                <NavLink class="nav-link" href="scores">
+                    <i class="bi bi-trophy-fill"></i> <span>Scores &amp; Handicap</span>
+                </NavLink>
+            </div>
+
+            <span class="nav-section-label">Account</span>
+
+            <div class="nav-item">
+                <NavLink class="nav-link" href="profile">
+                    <i class="bi bi-person-fill"></i> <span>My Profile</span>
+                </NavLink>
+            </div>
+
+            @if (UserServ.CurrentUser?.Role == "Admin" || UserServ.CurrentUser?.Role == "Staff")
+            {
+                <span class="nav-section-label">Administration</span>
+
+                <div class="nav-item">
+                    <NavLink href="admin/members" class="nav-link">
+                        <i class="bi bi-people-fill"></i> <span>Members</span>
+                    </NavLink>
+                </div>
+
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="admin/applications">
+                        <i class="bi bi-file-earmark-person-fill"></i> <span>Applications</span>
+                    </NavLink>
+                </div>
+
+                @if (UserServ.CurrentUser?.Role == "Admin")
+                {
+                    <div class="nav-item">
+                        <NavLink href="admin/auditlog" class="nav-link">
+                            <i class="bi bi-journal-text"></i> <span>Audit Log</span>
+                        </NavLink>
+                    </div>
+                }
+            }
         }
         else
         {
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="login">
-                    <span class="bi bi-person-badge"></span> Login
+            <span class="nav-section-label">Membership</span>
+
+            <div class="nav-item">
+                <NavLink class="nav-link" href="apply">
+                    <i class="bi bi-person-plus-fill"></i> <span>Apply for Membership</span>
                 </NavLink>
             </div>
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="register">
-                    <span class="bi bi-plus-square"></span> Register
+
+            <div class="nav-item">
+                <NavLink href="teesheet" class="nav-link">
+                    <i class="bi bi-calendar3"></i> <span>View Tee Sheet</span>
                 </NavLink>
             </div>
         }
+
     </nav>
 </div>
 
+<!-- user card / Login -->
+@if (UserServ.IsLoggedIn)
+{
+    <div class="sidebar-user-card">
+        <i class="bi bi-person-circle" style="color:var(--cb-gold); font-size:1.1rem;"></i>
+        <span class="sidebar-user-name">@UserServ.CurrentUser?.Username</span>
+        @if (memberProfile != null)
+        {
+            <span class="sidebar-user-role">
+                @memberProfile.Tier @memberProfile.MemberType &bull; @memberProfile.MemberNumber
+            </span>
+        }
+        else
+        {
+            <span class="sidebar-user-role">@UserServ.CurrentUser?.Role</span>
+        }
+    </div>
+
+    <div class="sidebar-footer">
+        <button class="btn btn-sidebar-logout" @onclick="HandleLogout">
+            <i class="bi bi-box-arrow-right"></i> <span>Sign Out</span>
+        </button>
+    </div>
+}
+else
+{
+    <div class="sidebar-footer">
+        <a href="/login" class="btn btn-gold w-100" style="font-size:0.85rem;">
+            <i class="bi bi-person-badge"></i> Sign In
+        </a>
+    </div>
+}
+
 @code {
-    protected override void OnInitialized()
+    MemberProfile? memberProfile;
+
+    protected override async Task OnInitializedAsync()
     {
-        UserServ.OnChange += StateHasChanged;
+        UserServ.OnChange += OnUserChanged;
+        await LoadMemberProfile();
+    }
+
+    private async Task LoadMemberProfile()
+    {
+        if (UserServ.CurrentUser != null)
+        {
+            await using var db = DBFactory.CreateDbContext();
+            memberProfile = await db.MemberProfiles
+                .FirstOrDefaultAsync(m => m.UserId == UserServ.CurrentUser.UserId);
+        }
+        else
+        {
+            memberProfile = null;
+        }
+@* statte changes, cant leave the page as is, reload *@
+        StateHasChanged();
+    }
+
+    private void OnUserChanged()
+    {
+        _ = LoadMemberProfile();
     }
 
     public void Dispose()
     {
-    
-        UserServ.OnChange -= StateHasChanged;
+        UserServ.OnChange -= OnUserChanged;
     }
-
+@* logging out takes to homepage but still showing user data, force a reload after logout using forceload *@
     private void HandleLogout()
     {
         UserServ.Logout();
-        Nav.NavigateTo("/login");
+        Nav.NavigateTo("/", forceLoad: true);
     }
 }

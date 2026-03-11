@@ -1,90 +1,140 @@
 @page "/register"
 @using ClubBaist.Data
 @using ClubBaist.Models
+@using Microsoft.EntityFrameworkCore
 @rendermode InteractiveServer
-@inject ClubBaistDbContext DB
+@inject IDbContextFactory<ClubBaistDbContext> DBFactory
 @inject NavigationManager Nav
+@* same EmptyLayout as login no nav, full screen split *@
+@layout ClubBaist.Components.Layout.EmptyLayout
 
-<PageTitle>Register - CLUB-BAIST</PageTitle>
+<PageTitle>Create Account - Club BAIST</PageTitle>
 
-<div class="row justify-content-center mt-5">
-    <div class="col-md-4 border p-4 shadow-sm bg-white">
-        <h3 class="mb-3">Create Account</h3>
-        
-        @if (!string.IsNullOrEmpty(errorMessage))
-        {
-            <div class="alert alert-danger">@errorMessage</div>
-        }
-
-        <div class="mb-3">
-            <label class="form-label">Username</label>
-            <input class="form-control" @bind="username" placeholder="Enter username" />
+<div class="auth-page">
+    <!-- Left panel -->
+    <div class="auth-panel-left">
+        <div class="text-center">
+            <div style="font-size:4rem; color:var(--cb-gold); margin-bottom:1rem;"><i class="bi bi-flag-fill"></i></div>
+            <div class="auth-brand-name">CLUB <span>BAIST</span></div>
+            <div class="auth-brand-tagline">Founded 1970 &bull; 18 Holes</div>
+            <p class="mt-4" style="color:rgba(255,255,255,0.55); font-size:0.88rem; max-width:280px; margin:2rem auto 0;">
+                Create an account to access the Club BAIST member portal.
+                Membership must be approved separately.
+            </p>
         </div>
-        
-        <div class="mb-3">
-            <label class="form-label">Email</label>
-            <input type="email" class="form-control" @bind="email" placeholder="name@example.com" />
-        </div>
-        
-        <div class="mb-3">
-            <label class="form-label">Password</label>
-            <input type="password" class="form-control" @bind="password" placeholder="••••••••" />
-        </div>
+    </div>
 
-       
-        <div class="mb-3">
-            <label class="form-label">Account Type</label>
-            <select class="form-select" @bind="role">
-                <option value="Member">Member</option>
-                <option value="Staff">Staff</option>
-            </select>
-        </div>
+    <!-- Right panel -->
+    <div class="auth-panel-right">
+        <div style='max-width:380px; width:100%;'>
+            <div style="font-size:2rem; color:var(--cb-gold); margin-bottom:1rem;"><i class="bi bi-flag-fill"></i></div>
+            <h2 class="auth-form-title">Create Account</h2>
+            <p class="auth-form-subtitle">Set up your Club BAIST portal access</p>
 
-        <button class="btn btn-primary w-100" @onclick="RegisterUser">Sign Up</button>
-        
-        <div class="mt-3 text-center">
-            <small>Already have an account? <a href="/login">Login here</a></small>
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger mb-3">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+                </div>
+            }
+
+            @if (success)
+            {
+                <div class="alert alert-success mb-3">
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                    Account created! <a href="/login" class="fw-semibold">Sign in now</a>
+                </div>
+            }
+            else
+            {
+                <div class="mb-3">
+                    <label class="form-label">Username</label>
+                    <input class="form-control" @bind="username" placeholder="e.g. jsmith" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Email Address</label>
+                    <input type="email" class="form-control" @bind="email" placeholder="your@email.com" />
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-control" @bind="password" placeholder="Min 8 characters" />
+                </div>
+
+                <button class="btn btn-gold w-100 py-2" @onclick="RegisterUser" disabled="@isLoading">
+                    @if (isLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                    }
+                    <i class="bi bi-person-plus-fill me-2"></i>Create Account
+                </button>
+
+                <div class="mt-4 text-center" style="font-size:0.85rem;">
+                    <span style="color:var(--cb-muted);">Already have an account? </span>
+                    <a href="/login" class="fw-semibold" style="color:var(--cb-green);">Sign In</a>
+                </div>
+                <div class="text-center mt-2" style="font-size:0.82rem;">
+                    <a href="/apply" style="color:var(--cb-muted);">Apply for Club Membership →</a>
+                </div>
+            }
         </div>
     </div>
 </div>
 
 @code {
     private string username = "";
-    private string email = "";
+    private string email    = "";
     private string password = "";
-    private string role = "Member";
-    private string errorMessage = "";
+    string errorMessage = "";
+    private bool success = false;
+    private bool isLoading = false;
 
     private async Task RegisterUser()
     {
-        //  validation
-        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        if (isLoading) return;
+        errorMessage = "";
+
+        if (string.IsNullOrWhiteSpace(username) ||
+            string.IsNullOrWhiteSpace(email) ||
+            string.IsNullOrWhiteSpace(password))
         {
             errorMessage = "All fields are required.";
             return;
         }
 
+        if (password.Length < 8)
+        {
+            errorMessage = "Password must be at least 8 characters.";
+            return;
+        }
+
+        isLoading = true;
         try
         {
+            // role starts as "Member", very limited access, admin has to link a profile to unlock golf stuff
+            // creating an account does NOT give you membership, thats a separate admin step
             var user = new User
             {
-                Username = username,
-                Email = email,
+                Username     = username.Trim(),
+                Email        = email.Trim().ToLower(),
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
-                Role = role
+                Role         = "Member"
             };
 
-            DB.Users.Add(user);
-            await DB.SaveChangesAsync();
-            
-            // Redirect
-            Nav.NavigateTo("/login");
+            await using var db = DBFactory.CreateDbContext();
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
+            success = true;
         }
-        catch (Exception ex)
+        catch
         {
-            //  
-            errorMessage = "Registration failed. The username or email may already be in use.";
-            Console.WriteLine(ex.Message);
+            // prolly a unique constraint violation from the username or email 
+            errorMessage = "Registration failed. That username or email may already be in use.";
+        }
+        finally
+        {
+            isLoading = false;
         }
     }
 }

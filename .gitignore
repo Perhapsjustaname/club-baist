@@ -1,0 +1,91 @@
+# ========================
+# .NET / ASP.NET Core
+# ========================
+bin/
+obj/
+**/bin/
+**/obj/
+*.nupkg
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+publish/
+TestResults/
+
+# ========================
+# Visual Studio
+# ========================
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.rsuser
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Ll]og/
+[Ll]ogs/
+
+# ========================
+# VS Code
+# ========================
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+.history/
+
+# ========================
+# Config files with secrets
+# connection strings live here - dont commit
+# ========================
+**/appsettings.json
+**/appsettings.*.json
+secrets.json
+**/secrets.json
+
+# ========================
+# User secrets (dotnet user-secrets)
+# ========================
+**/Properties/launchSettings.json
+
+# ========================
+# OS generated
+# ========================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ========================
+# Claude Code local memory
+# project-specific AI notes, not relevant to other devs
+# ========================
+.claude/
+
+# ========================
+# Local DB / SQL Server files
+# ========================
+*.mdf
+*.ldf
+*.ndf
+
+# ========================
+# Rider / JetBrains
+# ========================
+.idea/
+*.sln.iml

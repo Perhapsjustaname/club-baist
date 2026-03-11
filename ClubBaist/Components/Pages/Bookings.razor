@@ -1,0 +1,401 @@
+@page "/bookings"
+@using ClubBaist.Data
+@using ClubBaist.Models
+@using ClubBaist.Services
+@using Microsoft.EntityFrameworkCore
+@rendermode InteractiveServer
+@inject UserService UserServ
+@inject TeeTimeService TeeTimeSvc
+@inject IDbContextFactory<ClubBaistDbContext> DBFactory
+@inject NavigationManager Nav
+
+<PageTitle>Book Tee Time — Club BAIST</PageTitle>
+
+@if (!UserServ.IsLoggedIn)
+{
+    <div class="alert alert-warning">
+        <i class="bi bi-lock-fill me-2"></i>
+        Please <a href="/login" class="fw-bold">sign in</a> to book a tee time.
+    </div>
+}
+else if (memberProfile == null)
+{
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle-fill me-2"></i>
+        No member profile found for your account. Please contact the pro shop.
+    </div>
+}
+else if (memberProfile.Status == MemberStatus.Suspended)
+{
+    @* suspended check at the top  *@
+    <div class="alert alert-danger">
+        <i class="bi bi-slash-circle-fill me-2"></i>
+        Your membership is currently <strong>suspended</strong>. Tee time bookings are not available.
+        Please contact the pro shop at <strong>(780) 655-7744</strong> to resolve your account.
+    </div>
+}
+else if (memberProfile.Tier == MembershipTier.Copper)
+{
+    @* copper sucks *@
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        Social (Copper) memberships do not include golf privileges.
+    </div>
+}
+else
+{
+    <div class="page-header">
+        <div>
+            <h1 class="page-header-title">Book a Tee Time</h1>
+            <p class="page-header-sub">@memberProfile.Tier membership — @GetTierRule()</p>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Booking form -->
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-header-golf">
+                    <h5><i class="bi bi-calendar-plus-fill me-2"></i>New Reservation</h5>
+                </div>
+                <div class="card-body">
+
+                    @if (!string.IsNullOrEmpty(bookingError))
+                    {
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>@bookingError
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(bookingSuccess))
+                    {
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle-fill me-2"></i>@bookingSuccess
+                        </div>
+                    }
+
+                    <!-- Date.... TODO: ask if can book more than 7 days inadvance -->
+                    <div class="mb-3">
+                        <label class="form-label">Date</label>
+                        <input type="date" class="form-control"
+                               value="@selectedDate.ToString("yyyy-MM-dd")"
+                               min="@DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd")"
+                               max="@DateOnly.FromDateTime(DateTime.Today.AddDays(7)).ToString("yyyy-MM-dd")"
+                               @onchange="OnDateChanged" />
+                        <div style="font-size:0.75rem; color:var(--cb-muted); margin-top:4px;">
+                            Bookings available up to 7 days in advance.
+                        </div>
+                    </div>
+
+                    <!-- Season warning -->
+                    @if (!TeeTimeSvc.IsInSeason(selectedDate))
+                    {
+                        <div class="alert alert-warning py-2">
+                            <i class="bi bi-cloud-snow me-1"></i>
+                            Selected date is outside the golf season (Mar 1 – Sep 30).
+                        </div>
+                    }
+
+                    <!-- Available time slots -->
+                    <div class="mb-3">
+                        <label class="form-label">Available Time Slots</label>
+                        @if (isLoadingSlots)
+                        {
+                            <div class="text-center py-2">
+                                <div class="spinner-border spinner-border-sm" role="status"></div>
+                                <span class="ms-2 text-muted" style="font-size:0.85rem;">Loading slots...</span>
+                            </div>
+                        }
+                        else if (!availableSlots.Any())
+                        {
+                            <div class="alert alert-info py-2" style="font-size:0.85rem;">
+                                No available slots for this date with your membership level.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="d-flex flex-wrap gap-2">
+                                @foreach (var slot in availableSlots)
+                                {
+                                    <button @onclick="() => SelectTime(slot)"
+                                            class="btn btn-sm @(selectedTime == slot ? "btn-green" : "btn-outline-green")"
+                                            style="font-size:0.8rem; min-width:80px;">
+                                        @slot.ToString("h:mm tt")
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <!-- Players -->
+                    <div class="mb-3">
+                        <label class="form-label">Number of Players</label>
+                        <select class="form-select" @bind="numberOfPlayers" @bind:after="OnPlayersChanged">
+                            <option value="1">1 Player</option>
+                            <option value="2">2 Players</option>
+                            <option value="3">3 Players</option>
+                            <option value="4">4 Players</option>
+                        </select>
+                    </div>
+
+                    @if (numberOfPlayers >= 2)
+                    {
+                        <div class="mb-2">
+                            <label class="form-label">Player 2 Name</label>
+                            <input class="form-control" @bind="player2" placeholder="Full name" />
+                        </div>
+                    }
+                    @if (numberOfPlayers >= 3)
+                    {
+                        <div class="mb-2">
+                            <label class="form-label">Player 3 Name</label>
+                            <input class="form-control" @bind="player3" placeholder="Full name" />
+                        </div>
+                    }
+                    @if (numberOfPlayers >= 4)
+                    {
+                        <div class="mb-2">
+                            <label class="form-label">Player 4 Name</label>
+                            <input class="form-control" @bind="player4" placeholder="Full name" />
+                        </div>
+                    }
+
+                    <!-- Carts -->
+                    <div class="mb-3 mt-3">
+                        <label class="form-label">Number of Carts</label>
+                        <select class="form-select" @bind="numberOfCarts">
+                            <option value="0">No carts</option>
+                            <option value="1">1 Cart</option>
+                            <option value="2">2 Carts</option>
+                        </select>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="mb-4">
+                        <label class="form-label">Notes (Optional)</label>
+                        <textarea class="form-control" rows="2" @bind="notes" placeholder="Any special requests..."></textarea>
+                    </div>
+
+                    @* only disabled if no time picked or already submitting *@
+                    <button class="btn btn-gold w-100 py-2"
+                            @onclick="SubmitBooking"
+                            disabled="@(isSubmitting || selectedTime == null)">
+                        @if (isSubmitting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        }
+                        <i class="bi bi-calendar-check me-2"></i>Confirm Reservation
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- My upcoming bookings -->
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header-golf">
+                    <h5><i class="bi bi-calendar2-check me-2"></i>My Upcoming Reservations</h5>
+                </div>
+                <div class="card-body p-0">
+                    @if (upcomingBookings == null)
+                    {
+                        <div class="p-4 text-center">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                        </div>
+                    }
+                    else if (!upcomingBookings.Any())
+                    {
+                        <div class="p-4 text-center text-muted">
+                            <i class="bi bi-calendar-x" style="font-size:2rem;"></i>
+                            <p class="mt-2 mb-0" style="font-size:0.88rem;">No upcoming reservations.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <table class="table mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Time</th>
+                                    <th>Players</th>
+                                    <th>Carts</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var b in upcomingBookings)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div style="font-weight:600;">@b.TeeDate.ToString("MMM d")</div>
+                                            <div style="font-size:0.75rem; color:var(--cb-muted);">@b.TeeDate.DayOfWeek</div>
+                                        </td>
+                                        <td style="font-weight:600; color:var(--cb-green-dark);">@b.TeeTime.ToString("h:mm tt")</td>
+                                        <td>@b.NumberOfPlayers</td>
+                                        <td>@b.NumberOfCarts</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                    style="font-size:0.75rem;"
+                                                    @onclick="() => CancelBooking(b.BookingId)">
+                                                <i class="bi bi-x-circle"></i> Cancel
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            </div>
+
+            <!-- Tier rules reminder -->
+            <div class="card mt-3">
+                <div class="card-body py-3">
+                    <h6 style="color:var(--cb-green-dark); font-size:0.82rem; text-transform:uppercase; letter-spacing:0.08em;">
+                        <i class="bi bi-info-circle me-1"></i>Your Booking Privileges
+                    </h6>
+                    <table class="table table-sm mb-0" style="font-size:0.82rem;">
+                        <thead><tr><th>Day</th><th>Allowed Times</th></tr></thead>
+                        <tbody>
+                            @if (memberProfile.Tier == MembershipTier.Gold)
+                            {
+                                <tr><td>Any day</td><td>Anytime</td></tr>
+                            }
+                            else if (memberProfile.Tier == MembershipTier.Silver)
+                            {
+                                <tr><td>Weekdays (Mon–Fri)</td><td>Before 3:00 PM or After 5:30 PM</td></tr>
+                                <tr><td>Weekend &amp; Holidays</td><td>After 11:00 AM</td></tr>
+                            }
+                            else if (memberProfile.Tier == MembershipTier.Bronze)
+                            {
+                                <tr><td>Weekdays (Mon–Fri)</td><td>Before 3:00 PM or After 6:00 PM</td></tr>
+                                <tr><td>Weekend &amp; Holidays</td><td>After 1:00 PM</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private MemberProfile? memberProfile;
+    private DateOnly selectedDate = DateOnly.FromDateTime(DateTime.Today);
+    TimeOnly? selectedTime;
+    private List<TimeOnly> availableSlots = new();
+    private List<TeeTimeBooking>? upcomingBookings;
+    private bool isLoadingSlots = false;
+    bool isSubmitting = false;
+
+    private int numberOfPlayers = 1;
+    private int numberOfCarts   = 0;
+    private string? player2, player3, player4, notes;
+    string bookingError = "";
+    private string bookingSuccess = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserServ.IsLoggedIn) return;
+
+        await using var db = DBFactory.CreateDbContext();
+        memberProfile = await db.MemberProfiles
+            .FirstOrDefaultAsync(m => m.UserId == UserServ.CurrentUser!.UserId);
+
+        if (memberProfile != null)
+        {
+            await LoadSlots();
+            await LoadUpcomingBookings();
+        }
+    }
+
+    private async Task OnDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
+            selectedDate = d;
+            selectedTime = null;
+            await LoadSlots();
+        }
+    }
+
+    // clear player names when count drops otherwise old names hang around in state
+    private void OnPlayersChanged()
+    {
+        if (numberOfPlayers < 2) player2 = null;
+        if (numberOfPlayers < 3) player3 = null;
+        if (numberOfPlayers < 4) player4 = null;
+    }
+
+    // service filters by tier rules + alreadybooked slots, so what comes back is safe to show
+    private async Task LoadSlots()
+    {
+        if (memberProfile == null) return;
+        isLoadingSlots = true;
+        availableSlots = await TeeTimeSvc.GetAvailableSlotsAsync(selectedDate, memberProfile.Tier);
+        isLoadingSlots = false;
+    }
+
+    private void SelectTime(TimeOnly t)
+    {
+        selectedTime   = t;
+        bookingError   = "";
+        bookingSuccess = "";
+    }
+
+    private async Task SubmitBooking()
+    {
+        if (memberProfile == null || selectedTime == null) return;
+        isSubmitting   = true;
+        bookingError   = "";
+        bookingSuccess = "";
+
+        var error = await TeeTimeSvc.BookTeeTimeAsync(
+            memberProfile.MemberProfileId,
+            memberProfile.Tier,
+            selectedDate,
+            selectedTime.Value,
+            numberOfPlayers,
+            numberOfCarts,
+            player2, player3, player4, notes);
+
+        if (error != null)
+        {
+            bookingError = error;
+        }
+        else
+        {
+            bookingSuccess = $"Your tee time for {selectedDate:MMMM d} at {selectedTime.Value:h:mm tt} is confirmed!";
+            selectedTime = null;
+            player2 = player3 = player4 = notes = null;
+            numberOfPlayers = 1;
+            numberOfCarts   = 0;
+            await LoadSlots();
+            await LoadUpcomingBookings();
+        }
+
+        isSubmitting = false;
+    }
+
+    private async Task CancelBooking(int bookingId)
+    {
+        if (memberProfile == null) return;
+        await TeeTimeSvc.CancelBookingAsync(bookingId, memberProfile.MemberProfileId);
+        bookingSuccess = "Booking cancelled successfully.";
+        await LoadSlots();
+        await LoadUpcomingBookings();
+    }
+
+    private async Task LoadUpcomingBookings()
+    {
+        if (memberProfile == null) return;
+        upcomingBookings = await TeeTimeSvc.GetMemberUpcomingBookingsAsync(memberProfile.MemberProfileId);
+    }
+
+    private string GetTierRule() => memberProfile?.Tier switch
+    {
+        MembershipTier.Gold   => "Anytime access, any day",
+        MembershipTier.Silver => "Before 3 PM or After 5:30 PM (weekdays) · After 11 AM (weekends)",
+        MembershipTier.Bronze => "Before 3 PM or After 6 PM (weekdays) · After 1 PM (weekends)",
+        _                     => ""
+    };
+}

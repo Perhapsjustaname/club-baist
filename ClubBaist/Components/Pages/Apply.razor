@@ -1,0 +1,312 @@
+@page "/apply"
+@using ClubBaist.Data
+@using ClubBaist.Models
+@using Microsoft.EntityFrameworkCore
+@rendermode InteractiveServer
+@inject IDbContextFactory<ClubBaistDbContext> DBFactory
+@inject NavigationManager Nav
+
+<PageTitle>Apply for Membership — Club BAIST</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-header-title">Membership Application</h1>
+        <!-- TOdo: ask when the founded date or history is suppsoed to be for this site -->
+        <p class="page-header-sub">Club BAIST — Founded 1970</p>
+    </div>
+</div>
+
+@if (submitted)
+{
+    <div class="card" style="max-width:600px; margin:0 auto; text-align:center;">
+        <div class="card-body py-5">
+            <div style="font-size:4rem; color:var(--cb-gold);"><i class="bi bi-check-circle-fill"></i></div>
+            <h3 class="mt-3" style="font-family:'Playfair Display',serif; color:var(--cb-green-dark);">Application Submitted</h3>
+            <p class="text-muted mt-2">
+                Thank you, <strong>@model.FirstName</strong>! Your membership application has been received.<br>
+                The membership committee reviews applications monthly.<br>
+                You will be contacted at <strong>@model.Email</strong>.
+            </p>
+            <div class="mt-4 p-3 rounded" style="background:var(--cb-cream); font-size:0.85rem; color:var(--cb-muted);">
+                Application statuses: Pending → Under Review → Accepted / Denied / On Hold / Waitlisted
+            </div>
+            <a href="/" class="btn btn-green mt-3 px-4">Return to Home</a>
+        </div>
+    </div>
+}
+else
+{
+    @if (!string.IsNullOrEmpty(errorMsg))
+    {
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMsg
+        </div>
+    }
+
+    <div class="row g-4">
+        <!-- Form -->
+        <div class="col-lg-8">
+
+            <!-- Personal info -->
+            <div class="card mb-3">
+                <div class="card-header-golf">
+                    <h5><i class="bi bi-person-fill me-2"></i>Personal Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">First Name *</label>
+                            <input class="form-control" @bind="model.FirstName" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Last Name *</label>
+                            <input class="form-control" @bind="model.LastName" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email *</label>
+                            <input type="email" class="form-control" @bind="model.Email" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Date of Birth</label>
+                            <input type="date" class="form-control"
+                                   @onchange="e => { if (DateOnly.TryParse(e.Value?.ToString(), out var d)) model.DateOfBirth = d; }" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Phone</label>
+                            <input class="form-control" placeholder="(403) 555-0000" @bind="model.Phone" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Alternate Phone</label>
+                            <input class="form-control" @bind="model.AlternatePhone" />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Home Address</label>
+                            <input class="form-control" @bind="model.Address" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Postal Code</label>
+                            <input class="form-control" @bind="model.PostalCode" placeholder="T2P 0A1" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Employment -->
+            <div class="card mb-3">
+                <div class="card-header-golf">
+                    <h5><i class="bi bi-briefcase-fill me-2"></i>Employment</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Occupation</label>
+                            <input class="form-control" @bind="model.Occupation" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Company Name</label>
+                            <input class="form-control" @bind="model.CompanyName" />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Company Address</label>
+                            <input class="form-control" @bind="model.CompanyAddress" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Company Postal Code</label>
+                            <input class="form-control" @bind="model.CompanyPostalCode" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Membership type -->
+            <div class="card mb-3">
+                <div class="card-header-golf">
+                    <h5><i class="bi bi-card-checklist me-2"></i>Requested Membership</h5>
+                </div>
+                <div class="card-body">
+                    <label class="form-label">Membership Type *</label>
+                    <select class="form-select" @bind="model.RequestedType">
+                        <option value="@MembershipType.Shareholder">Gold — Shareholder ($3,000/yr + $10,000 entrance)</option>
+                        <option value="@MembershipType.Associate">Gold — Associate ($4,500/yr + $10,000 entrance)</option>
+                        <option value="@MembershipType.ShareholderSpouse">Silver — Shareholder Spouse ($2,000/yr)</option>
+                        <option value="@MembershipType.AssociateSpouse">Silver — Associate Spouse ($2,500/yr)</option>
+                        <option value="@MembershipType.PeeWee">Bronze — Pee Wee, age 6–11 ($250/yr)</option>
+                        <option value="@MembershipType.Junior">Bronze — Junior, age 12–17 ($500/yr)</option>
+                        <option value="@MembershipType.Intermediate">Bronze — Intermediate, age 18–24 ($1,000/yr)</option>
+                        <option value="@MembershipType.Social">Copper — Social, no golf ($100/yr)</option>
+                    </select>
+                    <div style="font-size:0.78rem; color:var(--cb-muted); margin-top:6px;">
+                        All fees are due April 1. Gold shares: $1,000 purchase price. Entrance fee payable in 4 installments of $2,500.
+                        A 10% late penalty applies to overdue balances. Fees do not include GST.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sponsors -->
+            <div class="card mb-3">
+                <div class="card-header-golf">
+                    <h5><i class="bi bi-people-fill me-2"></i>Sponsor Information</h5>
+                </div>
+                <div class="card-body">
+                    <!-- need 2 gold shareholders 5 years tenure each  -->
+                    <div class="alert alert-info py-2 mb-3" style="font-size:0.82rem;">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Two existing Gold Shareholder members (5+ years, in good standing) must sponsor your application.
+                        Each shareholder may sponsor up to 2 applicants per year.
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-12"><strong style="font-size:0.85rem; color:var(--cb-green-dark);">Sponsor 1</strong></div>
+                        <div class="col-md-4">
+                            <label class="form-label">Member Number</label>
+                            <input class="form-control" @bind="model.Sponsor1MemberNumber" placeholder="CB-XXXX-XXXX" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Full Name</label>
+                            <input class="form-control" @bind="model.Sponsor1Name" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Signature (typed)</label>
+                            <input class="form-control" @bind="model.Sponsor1Signature" placeholder="Type full name" />
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-12"><strong style="font-size:0.85rem; color:var(--cb-green-dark);">Sponsor 2</strong></div>
+                        <div class="col-md-4">
+                            <label class="form-label">Member Number</label>
+                            <input class="form-control" @bind="model.Sponsor2MemberNumber" placeholder="CB-XXXX-XXXX" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Full Name</label>
+                            <input class="form-control" @bind="model.Sponsor2Name" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Signature (typed)</label>
+                            <input class="form-control" @bind="model.Sponsor2Signature" placeholder="Type full name" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Declaration -->
+            <div class="card mb-4">
+                <div class="card-header-golf">
+                    <h5><i class="bi bi-pen-fill me-2"></i>Declaration &amp; Signature</h5>
+                </div>
+                <div class="card-body">
+                    <p style="font-size:0.85rem; color:var(--cb-muted); line-height:1.7;">
+                        I hereby apply to become a Shareholder/Associate of Club BAIST. If elected I agree to pay
+                        the annual dues and I also agree to become bound by the Memorandum and Articles of
+                        Association of Club BAIST, and the rules, regulations and By-laws of the Directors of
+                        Club BAIST, and all amendments thereto. I will also pledge allegiance to the resistance.
+                    </p>
+                    <div class="row g-3 mt-1">
+                        <div class="col-md-6">
+                            <label class="form-label">Signature (type your full name) *</label>
+                            <input class="form-control" @bind="signature" placeholder="Type your full legal name" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Date *</label>
+                            <input type="date" class="form-control"
+                                   value="@DateTime.Today.ToString("yyyy-MM-dd")"
+                                   @onchange="e => { if (DateTime.TryParse(e.Value?.ToString(), out var d)) signatureDate = d; }" />
+                        </div>
+                    </div>
+                    <div class="mt-3 p-3 rounded" style="background:var(--cb-cream); font-size:0.78rem; color:var(--cb-muted);">
+                        <strong>Privacy Notice:</strong> The information you provide is requested strictly to update our membership data
+                        and the Membership Roster. This information will not be used for any other purpose except with your written permission or to be sent to palantir.
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn btn-gold btn-lg px-5" @onclick="SubmitApplication" disabled="@isSaving">
+                @if (isSaving) { <span class="spinner-border spinner-border-sm me-2"></span> }
+                <i class="bi bi-send-fill me-2"></i>Submit Application
+            </button>
+        </div>
+
+        <!-- Sidebar info -->
+        <div class="col-lg-4">
+            <div class="card mb-3" style="position:sticky; top:1rem;">
+                <div class="card-header-golf">
+                    <h5><i class="bi bi-info-circle-fill me-2"></i>Membership Fees</h5>
+                </div>
+                <div class="card-body" style="font-size:0.83rem;">
+                    <div class="mb-3">
+                        <div style="color:var(--cb-gold); font-weight:700; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.08em;">Gold</div>
+                        <div class="d-flex justify-content-between py-1"><span>Shareholder</span><span>$3,000/yr</span></div>
+                        <div class="d-flex justify-content-between py-1"><span>Associate</span><span>$4,500/yr</span></div>
+                        <div style="color:var(--cb-muted); font-size:0.75rem;">+ $10,000 entrance fee · $1,000 share · $500 min F&amp;B</div>
+                    </div>
+                    <hr class="gold-divider" />
+                    <div class="mb-3">
+                        <div style="color:#aaa; font-weight:700; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.08em;">Silver</div>
+                        <div class="d-flex justify-content-between py-1"><span>Shareholder Spouse</span><span>$2,000/yr</span></div>
+                        <div class="d-flex justify-content-between py-1"><span>Associate Spouse</span><span>$2,500/yr</span></div>
+                    </div>
+                    <hr class="gold-divider" />
+                    <div class="mb-3">
+                        <div style="color:#cd7f32; font-weight:700; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.08em;">Bronze</div>
+                        <div class="d-flex justify-content-between py-1"><span>Pee Wee (6–11)</span><span>$250/yr</span></div>
+                        <div class="d-flex justify-content-between py-1"><span>Junior (12–17)</span><span>$500/yr</span></div>
+                        <div class="d-flex justify-content-between py-1"><span>Intermediate (18–24)</span><span>$1,000/yr</span></div>
+                    </div>
+                    <hr class="gold-divider" />
+                    <div>
+                        <div style="color:#888; font-weight:700; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.08em;">Copper</div>
+                        <div class="d-flex justify-content-between py-1"><span>Social (no golf)</span><span>$100/yr</span></div>
+                    </div>
+                    <div class="mt-3 p-2 rounded" style="background:var(--cb-cream); font-size:0.75rem; color:var(--cb-muted);">
+                        All fees due April 1. 10% late penalty applies. Fees exclude GST.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private MembershipApplication model = new();
+    private string signature    = "";
+    DateTime signatureDate      = DateTime.Today;
+    private bool submitted      = false;
+    private bool isSaving       = false;
+    string errorMsg             = "";
+
+    private async Task SubmitApplication()
+    {
+        errorMsg = "";
+
+        if (string.IsNullOrWhiteSpace(model.FirstName)
+            || string.IsNullOrWhiteSpace(model.LastName)
+            || string.IsNullOrWhiteSpace(model.Email))
+        {
+            errorMsg = "First name, last name, and email are required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(signature))
+        {
+            errorMsg = "Please provide your signature (typed full name).";
+            return;
+        }
+
+        isSaving = true;
+
+        // only set sponsor date if they actually typed a signature, otherwise leave null
+        model.Sponsor1Date = model.Sponsor1Signature != null ? DateTime.Today : null;
+        model.Sponsor2Date = model.Sponsor2Signature != null ? DateTime.Today : null;
+        model.SubmittedAt  = DateTime.UtcNow;
+        // always starts as Pending - committee reviews monthly and moves it along
+        model.Status = ApplicationStatus.Pending;
+
+        await using var db = DBFactory.CreateDbContext();
+        db.MembershipApplications.Add(model);
+        await db.SaveChangesAsync();
+
+        // show confirmation card in place, dont redirect, wewant them to see the confirmation message
+        submitted = true;
+        isSaving  = false;
+    }
+}
