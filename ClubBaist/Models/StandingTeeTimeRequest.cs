@@ -22,11 +22,18 @@ public class StandingTeeTimeRequest
     public DateOnly StartDate { get; set; }
     public DateOnly EndDate { get; set; }
 
-    // Assigned by the committee
+    // workflow: Pending until committee reviews, then Approved or Declined
+    public RequestStatus Status { get; set; } = RequestStatus.Pending;
+    public string? DeclinedReason { get; set; }
+
+    // filled in by committee on approval
     public int? PriorityNumber { get; set; }
     public TimeOnly? ApprovedTime { get; set; }
     public string? ApprovedBy { get; set; }
     public DateTime? ApprovedDate { get; set; }
 
-    public bool IsActive { get; set; } = true;
+    // IsActive flips to true once approved and tee times are booked in the system
+    public bool IsActive { get; set; } = false;
 }
+
+public enum RequestStatus { Pending, Approved, Declined }

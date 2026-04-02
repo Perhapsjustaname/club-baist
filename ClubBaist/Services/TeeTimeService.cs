@@ -186,4 +186,164 @@ public class TeeTimeService
         await db.SaveChangesAsync();
         return true;
     }
+
+    // ============================================================
+    // STANDING TEE TIME REQUESTS
+    // ============================================================
+
+    // member submits a request - shareholder only, one per day of week
+    public async Task<string?> SubmitStandingRequestAsync(
+        int memberProfileId,
+        DayOfWeek dayOfWeek, TimeOnly preferredTime,
+        DateOnly startDate, DateOnly endDate,
+        string? member2Number, string? member2Name,
+        string? member3Number, string? member3Name,
+        string? member4Number, string? member4Name)
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        var member = await db.MemberProfiles.FindAsync(memberProfileId);
+
+        if (member == null) return "Member profile not found.";
+        if (!member.IsGoldShareholder)
+            return "Only Gold Shareholders may submit standing tee time requests.";
+
+        if (!IsInSeason(startDate) || !IsInSeason(endDate))
+            return "Start and end dates must be within the golf season (March 1 \u2013 September 30).";
+        if (startDate > endDate)
+            return "Start date must be before end date.";
+
+        // dont allow duplicate pending requests for same day
+        bool hasPending = await db.StandingTeeTimeRequests.AnyAsync(r =>
+            r.PrimaryMemberProfileId == memberProfileId &&
+            r.RequestedDayOfWeek == dayOfWeek &&
+            r.Status == RequestStatus.Pending);
+        if (hasPending)
+            return "You already have a pending standing request for that day of the week.";
+
+        db.StandingTeeTimeRequests.Add(new StandingTeeTimeRequest
+        {
+            PrimaryMemberProfileId = memberProfileId,
+            RequestedDayOfWeek     = dayOfWeek,
+            RequestedTime          = preferredTime,
+            StartDate              = startDate,
+            EndDate                = endDate,
+            Member2Number          = member2Number,
+            Member2Name            = member2Name,
+            Member3Number          = member3Number,
+            Member3Name            = member3Name,
+            Member4Number          = member4Number,
+            Member4Name            = member4Name,
+            Status                 = RequestStatus.Pending,
+            IsActive               = false
+        });
+
+        await db.SaveChangesAsync();
+        return null; // null = success
+    }
+
+    public async Task<List<StandingTeeTimeRequest>> GetAllStandingRequestsAsync()
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        return await db.StandingTeeTimeRequests
+            .Include(r => r.PrimaryMemberProfile)
+            .OrderBy(r => r.Status)
+            .ThenBy(r => r.RequestedDayOfWeek)
+            .ThenBy(r => r.RequestedTime)
+            .ToListAsync();
+    }
+
+    public async Task<List<StandingTeeTimeRequest>> GetMemberStandingRequestsAsync(int memberProfileId)
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        return await db.StandingTeeTimeRequests
+            .Where(r => r.PrimaryMemberProfileId == memberProfileId)
+            .OrderByDescending(r => r.RequestId)
+            .ToListAsync();
+    }
+
+    // approves the request, assigns time + priority, and auto-books all matching dates in the season
+    // returns success flag, message, and how many bookings were created
+    public async Task<(bool success, string message, int bookedCount)> ApproveStandingRequestAsync(
+        int requestId, TimeOnly approvedTime, int priority, string approvedBy)
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        var request = await db.StandingTeeTimeRequests
+            .Include(r => r.PrimaryMemberProfile)
+            .FirstOrDefaultAsync(r => r.RequestId == requestId);
+
+        if (request == null) return (false, "Request not found.", 0);
+        if (request.Status == RequestStatus.Approved) return (false, "Already approved.", 0);
+
+        request.Status        = RequestStatus.Approved;
+        request.ApprovedTime  = approvedTime;
+        request.PriorityNumber = priority;
+        request.ApprovedBy    = approvedBy;
+        request.ApprovedDate  = DateTime.UtcNow;
+        request.IsActive      = true;
+
+        // walk every day in the date range, book on matching day of week
+        var current = request.StartDate;
+        int booked = 0;
+
+        while (current <= request.EndDate)
+        {
+            if (current.DayOfWeek == request.RequestedDayOfWeek)
+            {
+                // skip if that slot is already taken by someone else
+                bool conflict = await db.TeeTimeBookings.AnyAsync(b =>
+                    b.TeeDate == current &&
+                    b.TeeTime == approvedTime &&
+                    b.Status  == BookingStatus.Confirmed);
+
+                if (!conflict)
+                {
+                    db.TeeTimeBookings.Add(new TeeTimeBooking
+                    {
+                        MemberProfileId = request.PrimaryMemberProfileId,
+                        TeeDate         = current,
+                        TeeTime         = approvedTime,
+                        NumberOfPlayers = CountStandingPlayers(request),
+                        Player2Name     = request.Member2Name,
+                        Player3Name     = request.Member3Name,
+                        Player4Name     = request.Member4Name,
+                        Status          = BookingStatus.Confirmed,
+                        IsStanding      = true,
+                        BookedAt        = DateTime.UtcNow,
+                        BookedByStaff   = approvedBy
+                    });
+                    booked++;
+                }
+            }
+            current = current.AddDays(1);
+        }
+
+        await db.SaveChangesAsync();
+        return (true, $"Approved. {booked} tee time{(booked != 1 ? "s" : "")} booked for the season.", booked);
+    }
+
+    public async Task<bool> DeclineStandingRequestAsync(int requestId, string declinedBy, string? reason)
+    {
+        await using var db = _dbFactory.CreateDbContext();
+        var request = await db.StandingTeeTimeRequests.FindAsync(requestId);
+        if (request == null || request.Status != RequestStatus.Pending) return false;
+
+        request.Status        = RequestStatus.Declined;
+        request.DeclinedReason = reason;
+        request.ApprovedBy    = declinedBy; // reusing field as "actioned by"
+        request.ApprovedDate  = DateTime.UtcNow;
+        request.IsActive      = false;
+
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    // counts how many players are in the standing request group
+    private static int CountStandingPlayers(StandingTeeTimeRequest r)
+    {
+        int count = 1;
+        if (!string.IsNullOrEmpty(r.Member2Name)) count++;
+        if (!string.IsNullOrEmpty(r.Member3Name)) count++;
+        if (!string.IsNullOrEmpty(r.Member4Name)) count++;
+        return count;
+    }
 }

@@ -93,7 +93,7 @@
                         <!-- Time -->
                         <div class="tee-sheet-time">@slot.ToString("h:mm tt")</div>
 
-                        <!-- first name visible to everyone, last name + member# only to admin/staff -->
+                        <!-- first name visible to everyone, last name + member# + phone only to admin/staff -->
                         <div class="tee-sheet-member flex-grow-1 px-2">
                             @if (booking != null)
                             {
@@ -105,6 +105,12 @@
                                             @booking.MemberProfile.LastName
                                             <span class="ms-1">(#@booking.MemberProfile.MemberNumber)</span>
                                         </span>
+                                        @if (!string.IsNullOrEmpty(booking.MemberProfile.Phone))
+                                        {
+                                            <span style="font-weight:400; color:var(--cb-muted); font-size:0.78rem; margin-left:8px;">
+                                                <i class="bi bi-telephone-fill me-1"></i>@booking.MemberProfile.Phone
+                                            </span>
+                                        }
                                     }
                                 </div>
                                 <div style="font-size:0.78rem; color:var(--cb-muted);">

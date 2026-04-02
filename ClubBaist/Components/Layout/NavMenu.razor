@@ -48,6 +48,16 @@
                 </NavLink>
             </div>
 
+            @* standing tee times only relevant to gold tier *@
+            @if (memberProfile?.Tier == MembershipTier.Gold)
+            {
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="standing">
+                        <i class="bi bi-repeat"></i> <span>Standing Tee Time</span>
+                    </NavLink>
+                </div>
+            }
+
             <span class="nav-section-label">Account</span>
 
             <div class="nav-item">
@@ -69,6 +79,12 @@
                 <div class="nav-item">
                     <NavLink class="nav-link" href="admin/applications">
                         <i class="bi bi-file-earmark-person-fill"></i> <span>Applications</span>
+                    </NavLink>
+                </div>
+
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="admin/standing">
+                        <i class="bi bi-repeat"></i> <span>Standing Requests</span>
                     </NavLink>
                 </div>
 
