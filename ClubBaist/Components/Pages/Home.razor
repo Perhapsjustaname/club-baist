@@ -37,7 +37,7 @@
 
     <div class="page-header">
         <div>
-            <h1 class="page-header-title">Welcome back, @memberProfile?.FirstName ?? UserServ.CurrentUser?.Username</h1>
+            <h1 class="page-header-title">Welcome back, @(memberProfile?.FirstName ?? UserServ.CurrentUser?.Username)</h1>
             <p class="page-header-sub">@DateTime.Now.ToString("dddd, MMMM d, yyyy") &bull; @GetSeasonStatus()</p>
         </div>
         @if (memberProfile != null)

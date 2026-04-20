@@ -6,7 +6,9 @@
 @rendermode InteractiveServer
 @inject IDbContextFactory<ClubBaistDbContext> DBFactory
 @inject NavigationManager Nav
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
 @inject UserService UserServ
+@inject ProtectedLocalStorage LocalStorage
 @* full screen auth page, no sidebar ,uses EmptyLayout so the nav doesnt show *@
 @layout ClubBaist.Components.Layout.EmptyLayout
 
@@ -122,6 +124,7 @@
             if (user != null && BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
             {
                 UserServ.Login(user);
+                await LocalStorage.SetAsync("cb_uid", user.UserId);
                 showSuccess = true;
                 StateHasChanged();
                 await Task.Delay(1000);

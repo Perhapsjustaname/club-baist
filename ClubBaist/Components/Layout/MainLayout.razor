@@ -1,4 +1,11 @@
 ﻿@inherits LayoutComponentBase
+@using ClubBaist.Data
+@using ClubBaist.Services
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject UserService UserServ
+@inject IDbContextFactory<ClubBaistDbContext> DBFactory
+@inject ProtectedLocalStorage LocalStorage
 
 <div class="page">
     <div class="sidebar">
@@ -18,3 +25,23 @@
         </article>
     </main>
 </div>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || UserServ.IsLoggedIn) return;
+        try
+        {
+            var result = await LocalStorage.GetAsync<int>("cb_uid");
+            if (!result.Success) return;
+            await using var db = DBFactory.CreateDbContext();
+            var user = await db.Users.FindAsync(result.Value);
+            if (user != null)
+            {
+                UserServ.Login(user);
+                StateHasChanged();
+            }
+        }
+        catch { }
+    }
+}

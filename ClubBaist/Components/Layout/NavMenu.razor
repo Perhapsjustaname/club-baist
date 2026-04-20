@@ -2,9 +2,11 @@
 @using ClubBaist.Data
 @using ClubBaist.Models
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
 @inject UserService UserServ
 @inject NavigationManager Nav
 @inject IDbContextFactory<ClubBaistDbContext> DBFactory
+@inject ProtectedLocalStorage LocalStorage
 @implements IDisposable
 
 <!-- brand -->
@@ -198,8 +200,9 @@ else
         UserServ.OnChange -= OnUserChanged;
     }
 @* logging out takes to homepage but still showing user data, force a reload after logout using forceload *@
-    private void HandleLogout()
+    private async Task HandleLogout()
     {
+        await LocalStorage.DeleteAsync("cb_uid");
         UserServ.Logout();
         Nav.NavigateTo("/", forceLoad: true);
     }
