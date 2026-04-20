@@ -81,6 +81,7 @@ public class ClubBaistDbContext : DbContext
         modelBuilder.Entity<TeeTimeBooking>().HasKey(b => b.BookingId);
         modelBuilder.Entity<StandingTeeTimeRequest>().HasKey(s => s.RequestId);
         modelBuilder.Entity<PlayerRound>().HasKey(r => r.RoundId);
+        modelBuilder.Entity<BillingTransaction>().HasKey(t => t.TransactionId);
 
         // BillingTransaction FK — cascade so a member delete also clears thier ledger
         modelBuilder.Entity<BillingTransaction>()
