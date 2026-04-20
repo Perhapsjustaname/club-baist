@@ -58,16 +58,13 @@ else
     </div>
 
     <!-- ── F&B minimum alert ──────────────────────────────────────────────── -->
-    @{
-        var fbShort = summaries.Where(s => s.FoodBeverageMinimum > 0 && !s.FoodBeverageMinimumMet).ToList();
-    }
-    @if (fbShort.Any())
+    @if (FbShort.Any())
     {
         <div class="alert-banner alert-banner--warning mb-4">
             <i class="bi bi-cup-hot me-2"></i>
-            <strong>@fbShort.Count Gold Shareholder@(fbShort.Count > 1 ? "s have" : " has") not met</strong>
+            <strong>@FbShort.Count Gold Shareholder@(FbShort.Count > 1 ? "s have" : " has") not met</strong>
             the $500 F&amp;B minimum for @currentSeason:
-            @string.Join(", ", fbShort.Select(s => s.FullName))
+            @string.Join(", ", FbShort.Select(s => s.FullName))
         </div>
     }
 
@@ -324,6 +321,9 @@ else
     {
         summaries = await BillingSvc.GetAllSummariesAsync(currentSeason);
     }
+
+    private List<MemberBillingSummary> FbShort => summaries?
+        .Where(s => s.FoodBeverageMinimum > 0 && !s.FoodBeverageMinimumMet).ToList() ?? new();
 
     private IEnumerable<MemberBillingSummary> FilteredSummaries => filter switch
     {

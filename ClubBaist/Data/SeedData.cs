@@ -700,7 +700,7 @@ public static class SeedData
         int sleeId     = sleeProfile.MemberProfileId;
         int kbakerId   = kbakerProfile.MemberProfileId;
         int tjohnsonId = tjohnsonProfile.MemberProfileId;
-        int pmartinezId = copperProfile.MemberProfileId;
+        int pmartinezId = pmartinezProfile.MemberProfileId;
 
         // -- admin: annual fee posted + paid in full
         AddTxn(adminId, BillingTransactionType.AnnualFee, 3000m,   "2026 Annual Dues – Shareholder",          new DateTime(2026, 1, 15, 9, 0, 0, DateTimeKind.Utc), "system");
