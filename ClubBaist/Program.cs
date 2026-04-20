@@ -14,6 +14,7 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<TeeTimeService>();
 builder.Services.AddScoped<MemberService>();
 builder.Services.AddScoped<AuditService>();
+builder.Services.AddScoped<BillingService>();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");

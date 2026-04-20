@@ -16,6 +16,7 @@ public class ClubBaistDbContext : DbContext
     public DbSet<PlayerRound> PlayerRounds { get; set; }
     public DbSet<HoleScore> HoleScores { get; set; }
     public DbSet<AuditLog> AuditLogs { get; set; }
+    public DbSet<BillingTransaction> BillingTransactions { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -81,7 +82,17 @@ public class ClubBaistDbContext : DbContext
         modelBuilder.Entity<StandingTeeTimeRequest>().HasKey(s => s.RequestId);
         modelBuilder.Entity<PlayerRound>().HasKey(r => r.RoundId);
 
-        // computed props dont have db columns, EF crashes if you dont Ignore 
+        // BillingTransaction FK — cascade so a member delete also clears thier ledger
+        modelBuilder.Entity<BillingTransaction>()
+            .HasOne(t => t.MemberProfile)
+            .WithMany()
+            .HasForeignKey(t => t.MemberProfileId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<BillingTransaction>()
+            .Property(t => t.Amount).HasPrecision(10, 2);
+
+        // computed props dont have db columns, EF crashes if you dont Ignore
         //TODO NEEDS testing
         modelBuilder.Entity<MemberProfile>().Ignore(m => m.IsGoldShareholder);
         modelBuilder.Entity<MemberProfile>().Ignore(m => m.FullName);

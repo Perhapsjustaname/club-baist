@@ -1,0 +1,213 @@
+@page "/billing"
+@rendermode InteractiveServer
+@using ClubBaist.Services
+@using ClubBaist.Models
+@using ClubBaist.Data
+@using Microsoft.EntityFrameworkCore
+@inject UserService UserServ
+@inject BillingService BillingSvc
+@inject IDbContextFactory<ClubBaistDbContext> DBFactory
+@inject NavigationManager Nav
+
+<PageTitle>My Billing – Club BAIST</PageTitle>
+
+@if (!UserServ.IsLoggedIn)
+{
+    Nav.NavigateTo("/login");
+    return;
+}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-header-title"><i class="bi bi-receipt me-2"></i>My Billing</h1>
+        <p class="page-header-sub">@currentSeason dues, payments, and account balance</p>
+    </div>
+</div>
+
+@if (summary == null)
+{
+    <p class="text-muted">Loading...</p>
+}
+else
+{
+    <!-- ── Balance summary cards ──────────────────────────────────────────── -->
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-value">$@summary.TotalCharged.ToString("N2")</div>
+                <div class="stat-label">Total Charged</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="stat-card" style="border-left-color:var(--cb-success);">
+                <div class="stat-value" style="color:var(--cb-success);">$@summary.TotalPaid.ToString("N2")</div>
+                <div class="stat-label">Total Paid</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="stat-card" style="border-left-color:@(summary.IsInArrears ? "var(--cb-danger)" : "var(--cb-success)");">
+                <div class="stat-value" style="color:@(summary.IsInArrears ? "var(--cb-danger)" : "var(--cb-success)");">
+                    $@summary.Balance.ToString("N2")
+                </div>
+                <div class="stat-label">@(summary.IsInArrears ? "Balance Owing" : "All Paid Up")</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-value">$@summary.AnnualFee.ToString("N0")</div>
+                <div class="stat-label">@currentSeason Annual Dues</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Status banner ─────────────────────────────────────────────────── -->
+    @if (summary.IsInArrears)
+    {
+        <div class="alert-banner alert-banner--warning mb-4">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            Your account has an outstanding balance of <strong>$@summary.Balance.ToString("N2")</strong>.
+            Please contact the pro shop to arrange payment.
+        </div>
+    }
+    else if (summary.TotalCharged > 0)
+    {
+        <div class="alert-banner alert-banner--success mb-4">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            Your account is paid up for @currentSeason. Thank you!
+        </div>
+    }
+    else
+    {
+        <div class="alert-banner alert-banner--info mb-4">
+            <i class="bi bi-info-circle-fill me-2"></i>
+            No charges have been posted to your account yet for @currentSeason.
+        </div>
+    }
+
+    <!-- ── Food & Beverage minimum (Gold Shareholders only) ──────────────── -->
+    @if (summary.FoodBeverageMinimum > 0)
+    {
+        <div class="card mb-4">
+            <div class="card-header-golf">
+                <h5><i class="bi bi-cup-hot-fill me-2"></i>Food &amp; Beverage Minimum</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-2">
+                    Gold Shareholders have a <strong>$@summary.FoodBeverageMinimum.ToString("N0")</strong>
+                    annual food &amp; beverage minimum. Charges are posted by the pro shop.
+                </p>
+                <div class="d-flex justify-content-between mb-1">
+                    <span>Spent this season: <strong>$@summary.FoodBeverageSpent.ToString("N2")</strong></span>
+                    <span>Minimum: <strong>$@summary.FoodBeverageMinimum.ToString("N0")</strong></span>
+                </div>
+                @{
+                    double pct = summary.FoodBeverageMinimum > 0
+                        ? Math.Min(100, (double)(summary.FoodBeverageSpent / summary.FoodBeverageMinimum * 100))
+                        : 100;
+                    string barColor = summary.FoodBeverageMinimumMet ? "var(--cb-success)" : "var(--cb-gold)";
+                }
+                <div style="background:var(--cb-cream-dark); border-radius:4px; height:10px; overflow:hidden; margin-top:0.4rem;">
+                    <div style="width:@pct.ToString("F0")%; background:@barColor; height:100%; transition:width 0.4s;"></div>
+                </div>
+                @if (summary.FoodBeverageMinimumMet)
+                {
+                    <small class="mt-1 d-block" style="color:var(--cb-success);">
+                        <i class="bi bi-check-circle-fill me-1"></i>Minimum met for @currentSeason
+                    </small>
+                }
+                else
+                {
+                    <small class="text-muted mt-1 d-block">
+                        $@((summary.FoodBeverageMinimum - summary.FoodBeverageSpent).ToString("N2")) remaining to reach the minimum
+                    </small>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- ── Transaction history ────────────────────────────────────────────── -->
+    <div class="card">
+        <div class="card-header-golf">
+            <h5><i class="bi bi-clock-history me-2"></i>Transaction History</h5>
+        </div>
+        <div class="card-body p-0">
+            @if (!summary.Transactions.Any())
+            {
+                <p class="text-muted p-4 mb-0">No transactions on record.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                                <th>Season</th>
+                                <th class="text-end">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var txn in summary.Transactions)
+                            {
+                                bool isCredit = txn.Amount < 0;
+                                <tr>
+                                    <td>@txn.TransactionDate.ToLocalTime().ToString("MMM d, yyyy")</td>
+                                    <td>
+                                        <span class="status-chip @TxnBadge(txn.Type)" style="font-size:0.72rem;">
+                                            @TxnLabel(txn.Type)
+                                        </span>
+                                    </td>
+                                    <td>@txn.Description</td>
+                                    <td>@txn.Season</td>
+                                    <td class="text-end fw-semibold" style="color:@(isCredit ? "var(--cb-success)" : "inherit");">
+                                        @(isCredit ? $"−${Math.Abs(txn.Amount):N2}" : $"${txn.Amount:N2}")
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    MemberBillingSummary? summary;
+    int currentSeason = DateTime.Now.Year;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserServ.IsLoggedIn) return;
+
+        await using var db = DBFactory.CreateDbContext();
+        var profile = await db.MemberProfiles
+            .FirstOrDefaultAsync(m => m.UserId == UserServ.CurrentUser!.UserId);
+
+        if (profile == null) return;
+
+        summary = await BillingSvc.GetSummaryAsync(profile.MemberProfileId, currentSeason);
+    }
+
+    private static string TxnBadge(BillingTransactionType type) => type switch
+    {
+        BillingTransactionType.AnnualFee          => "badge-gold",
+        BillingTransactionType.EntranceFee        => "badge-gold",
+        BillingTransactionType.FoodBeverageCharge => "badge-bronze",
+        BillingTransactionType.Payment            => "badge-green",
+        BillingTransactionType.Adjustment         => "badge-silver",
+        _                                         => "badge-silver"
+    };
+
+    private static string TxnLabel(BillingTransactionType type) => type switch
+    {
+        BillingTransactionType.AnnualFee          => "Annual Fee",
+        BillingTransactionType.EntranceFee        => "Entrance Fee",
+        BillingTransactionType.FoodBeverageCharge => "F&B",
+        BillingTransactionType.Payment            => "Payment",
+        BillingTransactionType.Adjustment         => "Adjustment",
+        _                                         => type.ToString()
+    };
+}

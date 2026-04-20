@@ -670,5 +670,83 @@ public static class SeedData
         });
 
         db.SaveChanges();
+
+        // ============================================================
+        // BILLING TRANSACTIONS — 2026 season
+        // demonstrates: annual fees posted, some paid, some partial,
+        // F&B charges for Gold shareholders, one with overdue balance
+        // ============================================================
+
+        // helper: shorthand so the block below isnt too noisy
+        void AddTxn(int profileId, BillingTransactionType type, decimal amount, string desc, DateTime date, string by = "system", int season = 2026)
+        {
+            db.BillingTransactions.Add(new BillingTransaction
+            {
+                MemberProfileId = profileId,
+                Type            = type,
+                Amount          = amount,
+                Description     = desc,
+                TransactionDate = date,
+                Season          = season,
+                RecordedBy      = by
+            });
+        }
+
+        int adminId    = adminProfile.MemberProfileId;
+        int staffId    = staffProfile.MemberProfileId;
+        int jsmithId   = goldProfile.MemberProfileId;
+        int rjonesId   = rjonesProfile.MemberProfileId;
+        int mwilsonId  = silverProfile.MemberProfileId;
+        int sleeId     = sleeProfile.MemberProfileId;
+        int kbakerId   = kbakerProfile.MemberProfileId;
+        int tjohnsonId = tjohnsonProfile.MemberProfileId;
+        int pmartinezId = copperProfile.MemberProfileId;
+
+        // -- admin: annual fee posted + paid in full
+        AddTxn(adminId, BillingTransactionType.AnnualFee, 3000m,   "2026 Annual Dues – Shareholder",          new DateTime(2026, 1, 15, 9, 0, 0, DateTimeKind.Utc), "system");
+        AddTxn(adminId, BillingTransactionType.Payment,  -3000m,   "Annual dues payment – cheque #1001",      new DateTime(2026, 1, 20, 14, 0, 0, DateTimeKind.Utc), "admin");
+        AddTxn(adminId, BillingTransactionType.FoodBeverageCharge, 125.50m, "Mar – Pro Shop dining",          new DateTime(2026, 3, 15, 18, 0, 0, DateTimeKind.Utc), "dthompson");
+        AddTxn(adminId, BillingTransactionType.FoodBeverageCharge, 210.00m, "Apr – Member events",            new DateTime(2026, 4, 5, 12, 0, 0, DateTimeKind.Utc), "dthompson");
+
+        // -- dthompson (staff / Gold Shareholder): annual fee posted + paid, some F&B
+        AddTxn(staffId, BillingTransactionType.AnnualFee, 3000m,   "2026 Annual Dues – Shareholder",          new DateTime(2026, 1, 15, 9, 0, 0, DateTimeKind.Utc), "system");
+        AddTxn(staffId, BillingTransactionType.Payment,  -3000m,   "Annual dues payment – direct deposit",    new DateTime(2026, 1, 22, 0, 0, 0, DateTimeKind.Utc), "admin");
+        AddTxn(staffId, BillingTransactionType.FoodBeverageCharge, 88.75m, "Mar – Lounge tab",               new DateTime(2026, 3, 20, 19, 0, 0, DateTimeKind.Utc), "dthompson");
+
+        // -- jsmith (Gold Shareholder): annual fee paid, F&B almost at minimum
+        AddTxn(jsmithId, BillingTransactionType.AnnualFee, 3000m,  "2026 Annual Dues – Shareholder",          new DateTime(2026, 1, 15, 9, 0, 0, DateTimeKind.Utc), "system");
+        AddTxn(jsmithId, BillingTransactionType.Payment,  -3000m,  "Annual dues payment – cheque #2201",      new DateTime(2026, 2, 3, 10, 0, 0, DateTimeKind.Utc), "admin");
+        AddTxn(jsmithId, BillingTransactionType.FoodBeverageCharge, 195.00m, "Mar – Dining room",             new DateTime(2026, 3, 8, 18, 30, 0, DateTimeKind.Utc), "dthompson");
+        AddTxn(jsmithId, BillingTransactionType.FoodBeverageCharge, 280.00m, "Apr – Member-Guest dinner",     new DateTime(2026, 4, 6, 19, 0, 0, DateTimeKind.Utc), "dthompson");
+        // jsmith F&B total = $475 — just under the $500 minimum
+
+        // -- rjones (Gold Associate): annual fee posted but only partially paid — in arrears
+        AddTxn(rjonesId, BillingTransactionType.AnnualFee, 4500m,  "2026 Annual Dues – Associate",            new DateTime(2026, 1, 15, 9, 0, 0, DateTimeKind.Utc), "system");
+        AddTxn(rjonesId, BillingTransactionType.Payment,  -2000m,  "Partial payment – cheque #4410",          new DateTime(2026, 2, 10, 0, 0, 0, DateTimeKind.Utc), "admin");
+        AddTxn(rjonesId, BillingTransactionType.FoodBeverageCharge, 55.00m, "Mar – Bar tab",                 new DateTime(2026, 3, 22, 17, 0, 0, DateTimeKind.Utc), "dthompson");
+        // rjones balance = $4500 - $2000 = $2500 still owing
+
+        // -- mwilson (Silver Shareholder Spouse): paid in full
+        AddTxn(mwilsonId, BillingTransactionType.AnnualFee, 2000m, "2026 Annual Dues – Shareholder Spouse",   new DateTime(2026, 1, 15, 9, 0, 0, DateTimeKind.Utc), "system");
+        AddTxn(mwilsonId, BillingTransactionType.Payment,  -2000m, "Annual dues payment – e-transfer",        new DateTime(2026, 1, 18, 0, 0, 0, DateTimeKind.Utc), "admin");
+
+        // -- slee (Silver Associate Spouse): annual fee posted, not yet paid
+        AddTxn(sleeId, BillingTransactionType.AnnualFee, 2500m,    "2026 Annual Dues – Associate Spouse",     new DateTime(2026, 1, 15, 9, 0, 0, DateTimeKind.Utc), "system");
+        // no payment yet — slee balance = $2500 owing
+
+        // -- kbaker (Bronze Intermediate): paid in full
+        AddTxn(kbakerId, BillingTransactionType.AnnualFee, 1000m,  "2026 Annual Dues – Intermediate",         new DateTime(2026, 1, 15, 9, 0, 0, DateTimeKind.Utc), "system");
+        AddTxn(kbakerId, BillingTransactionType.Payment,  -1000m,  "Annual dues payment – cheque #7702",      new DateTime(2026, 1, 30, 0, 0, 0, DateTimeKind.Utc), "admin");
+
+        // -- tjohnson (Bronze Junior): partial payment, small arrears
+        AddTxn(tjohnsonId, BillingTransactionType.AnnualFee, 500m, "2026 Annual Dues – Junior",               new DateTime(2026, 1, 15, 9, 0, 0, DateTimeKind.Utc), "system");
+        AddTxn(tjohnsonId, BillingTransactionType.Payment,  -250m, "Partial payment – cash",                  new DateTime(2026, 2, 5, 0, 0, 0, DateTimeKind.Utc), "dthompson");
+        // tjohnson balance = $250 still owing
+
+        // -- pmartinez (Copper Social): annual fee posted, paid
+        AddTxn(pmartinezId, BillingTransactionType.AnnualFee, 100m, "2026 Annual Dues – Social",              new DateTime(2026, 1, 15, 9, 0, 0, DateTimeKind.Utc), "system");
+        AddTxn(pmartinezId, BillingTransactionType.Payment,  -100m, "Annual dues payment – cash",             new DateTime(2026, 1, 16, 0, 0, 0, DateTimeKind.Utc), "admin");
+
+        db.SaveChanges();
     }
 }

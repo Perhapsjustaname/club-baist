@@ -58,6 +58,18 @@ Golf course membership and tee time booking system built with Blazor Server and 
    ```
    On first run, EF Core creates the `ClubBaistDB` database and seeds all sample data automatically.
 
+4. **Run the tests** *(optional — no database required)*
+
+   From the repo root (not inside `ClubBaist`):
+   ```bash
+   cd ClubBaist.Tests
+   dotnet test
+   ```
+   All tests should pass with output like:
+   ```
+   Passed!  - Failed: 0, Passed: 45, Skipped: 0, Total: 45
+   ```
+
 
 
 
@@ -141,6 +153,26 @@ Golf course membership and tee time booking system built with Blazor Server and 
 Golf season: **March 1 – September 30**. Tee times run 7:00 AM – 6:30 PM in 8-minute intervals.
 
 > Season start was changed to March 1 (from April 1 per club rules) to allow earlier testing. Change `SeasonStart` in `TeeTimeService.cs` to revert.
+
+---
+
+## Tests
+
+The `ClubBaist.Tests` project contains xUnit tests for the two pure-logic services. No database or running app is needed.
+
+From the repo root (`club-baist/`):
+```bash
+cd ClubBaist.Tests
+dotnet test
+```
+
+| File | What it covers |
+|------|---------------|
+| `HandicapTests.cs` | WHS score differential formula, handicap index calculation (best-N selection), GetTakeCount for all round counts (3–20+) |
+| `TeeTimeTests.cs` | Season date range, 8-minute slot generation, tier booking restrictions (Gold/Silver/Bronze/Copper) on weekdays and weekends |
+
+
+```
 
 ---
 

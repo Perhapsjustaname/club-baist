@@ -66,6 +66,12 @@
                 </NavLink>
             </div>
 
+            <div class="nav-item">
+                <NavLink class="nav-link" href="billing">
+                    <i class="bi bi-receipt"></i> <span>My Billing</span>
+                </NavLink>
+            </div>
+
             @if (UserServ.CurrentUser?.Role == "Admin" || UserServ.CurrentUser?.Role == "Staff")
             {
                 <span class="nav-section-label">Administration</span>
@@ -85,6 +91,12 @@
                 <div class="nav-item">
                     <NavLink class="nav-link" href="admin/standing">
                         <i class="bi bi-repeat"></i> <span>Standing Requests</span>
+                    </NavLink>
+                </div>
+
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="admin/billing">
+                        <i class="bi bi-cash-stack"></i> <span>Billing</span>
                     </NavLink>
                 </div>
 

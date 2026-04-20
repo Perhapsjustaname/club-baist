@@ -1,0 +1,426 @@
+@page "/admin/billing"
+@rendermode InteractiveServer
+@using ClubBaist.Services
+@using ClubBaist.Models
+@inject UserService UserServ
+@inject BillingService BillingSvc
+@inject NavigationManager Nav
+
+<PageTitle>Billing Management – Club BAIST</PageTitle>
+
+@if (!UserServ.IsLoggedIn || (UserServ.CurrentUser?.Role != "Admin" && UserServ.CurrentUser?.Role != "Staff"))
+{
+    Nav.NavigateTo("/");
+    return;
+}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-header-title"><i class="bi bi-cash-stack me-2"></i>Billing Management</h1>
+        <p class="page-header-sub">@currentSeason season — dues, payments, and F&amp;B tracking</p>
+    </div>
+</div>
+
+@if (summaries == null)
+{
+    <p class="text-muted">Loading...</p>
+}
+else
+{
+    <!-- ── Season summary stats ───────────────────────────────────────────── -->
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-value">@summaries.Count</div>
+                <div class="stat-label">Active Members</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="stat-card" style="border-left-color:var(--cb-danger);">
+                <div class="stat-value" style="color:var(--cb-danger);">@summaries.Count(s => s.IsInArrears)</div>
+                <div class="stat-label">In Arrears</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-value">@summaries.Count(s => !s.AnnualFeePostedThisSeason)</div>
+                <div class="stat-label">Fee Not Yet Posted</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="stat-card" style="border-left-color:var(--cb-danger);">
+                <div class="stat-value" style="color:var(--cb-danger);">
+                    $@summaries.Sum(s => s.Balance > 0 ? s.Balance : 0).ToString("N0")
+                </div>
+                <div class="stat-label">Total Outstanding</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── F&B minimum alert ──────────────────────────────────────────────── -->
+    @{
+        var fbShort = summaries.Where(s => s.FoodBeverageMinimum > 0 && !s.FoodBeverageMinimumMet).ToList();
+    }
+    @if (fbShort.Any())
+    {
+        <div class="alert-banner alert-banner--warning mb-4">
+            <i class="bi bi-cup-hot me-2"></i>
+            <strong>@fbShort.Count Gold Shareholder@(fbShort.Count > 1 ? "s have" : " has") not met</strong>
+            the $500 F&amp;B minimum for @currentSeason:
+            @string.Join(", ", fbShort.Select(s => s.FullName))
+        </div>
+    }
+
+    <!-- ── Member billing table ───────────────────────────────────────────── -->
+    <div class="card">
+        <div class="card-header-golf d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h5 class="mb-0"><i class="bi bi-people-fill me-2"></i>Member Accounts</h5>
+            <div class="d-flex gap-2 align-items-center">
+                <label class="form-label mb-0" style="color:var(--cb-gold-light); font-size:0.82rem;">Show:</label>
+                <select class="form-select form-select-sm" style="width:auto;" @bind="filter">
+                    <option value="all">All Members</option>
+                    <option value="arrears">In Arrears</option>
+                    <option value="unpaid">Fee Not Posted</option>
+                    <option value="fb">F&amp;B Short</option>
+                </select>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Member</th>
+                            <th>Tier / Type</th>
+                            <th class="text-end">Annual Fee</th>
+                            <th class="text-end">Charged</th>
+                            <th class="text-end">Paid</th>
+                            <th class="text-end">Balance</th>
+                            <th>F&amp;B</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var s in FilteredSummaries)
+                        {
+                            <tr class="@(s.IsInArrears ? "table-row-warning" : "")">
+                                <td>
+                                    <div class="fw-semibold">@s.FullName</div>
+                                    <small class="text-muted">@s.MemberNumber</small>
+                                </td>
+                                <td>
+                                    <span class="status-chip @TierBadge(s.Tier)" style="font-size:0.72rem;">@s.Tier</span>
+                                    <small class="d-block text-muted mt-1">@s.MemberType</small>
+                                </td>
+                                <td class="text-end">$@s.AnnualFee.ToString("N0")</td>
+                                <td class="text-end">$@s.TotalCharged.ToString("N2")</td>
+                                <td class="text-end" style="color:var(--cb-success);">$@s.TotalPaid.ToString("N2")</td>
+                                <td class="text-end fw-semibold" style="color:@(s.IsInArrears ? "var(--cb-danger)" : "var(--cb-success)");">
+                                    @if (s.IsInArrears)
+                                    {
+                                        <span>$@s.Balance.ToString("N2") <i class="bi bi-exclamation-circle-fill"></i></span>
+                                    }
+                                    else
+                                    {
+                                        <span>$0.00 <i class="bi bi-check-circle-fill"></i></span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (s.FoodBeverageMinimum > 0)
+                                    {
+                                        double pct = Math.Min(100, (double)(s.FoodBeverageSpent / s.FoodBeverageMinimum * 100));
+                                        <div style="min-width:80px;">
+                                            <div style="background:var(--cb-cream-dark); border-radius:3px; height:6px; overflow:hidden;">
+                                                <div style="width:@pct.ToString("F0")%; background:@(s.FoodBeverageMinimumMet ? "var(--cb-success)" : "var(--cb-gold)"); height:100%;"></div>
+                                            </div>
+                                            <small class="text-muted">$@s.FoodBeverageSpent.ToString("N0") / $@s.FoodBeverageMinimum.ToString("N0")</small>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <small class="text-muted">N/A</small>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="d-flex gap-1 flex-wrap">
+                                        <button class="btn btn-sm btn-outline-secondary"
+                                                disabled="@s.AnnualFeePostedThisSeason"
+                                                title="@(s.AnnualFeePostedThisSeason ? "Already posted for " + currentSeason : "Post " + currentSeason + " annual fee")"
+                                                @onclick="() => OpenPostFee(s)">
+                                            <i class="bi bi-file-earmark-plus"></i> Fee
+                                        </button>
+                                        <button class="btn btn-sm btn-gold" @onclick="() => OpenPayment(s)">
+                                            <i class="bi bi-cash"></i> Pay
+                                        </button>
+                                        @if (s.FoodBeverageMinimum > 0)
+                                        {
+                                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenFB(s)">
+                                                <i class="bi bi-cup-hot"></i> F&amp;B
+                                            </button>
+                                        }
+                                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => OpenAdjust(s)">
+                                            <i class="bi bi-pencil"></i> Adj
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-secondary"
+                                                title="View transactions"
+                                                @onclick="() => ToggleHistory(s.MemberProfileId)">
+                                            <i class="bi bi-clock-history"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <!-- inline transaction history — toggled per member -->
+                            @if (expandedId == s.MemberProfileId)
+                            {
+                                <tr>
+                                    <td colspan="8" style="background:var(--cb-cream); padding:0.75rem 1.25rem;">
+                                        @if (!s.Transactions.Any())
+                                        {
+                                            <small class="text-muted">No transactions.</small>
+                                        }
+                                        else
+                                        {
+                                            <table class="table table-sm mb-0" style="font-size:0.82rem;">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Date</th>
+                                                        <th>Type</th>
+                                                        <th>Description</th>
+                                                        <th>Recorded By</th>
+                                                        <th class="text-end">Amount</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var txn in s.Transactions)
+                                                    {
+                                                        bool isCredit = txn.Amount < 0;
+                                                        <tr>
+                                                            <td>@txn.TransactionDate.ToLocalTime().ToString("MMM d, yyyy")</td>
+                                                            <td>
+                                                                <span class="status-chip @TxnBadge(txn.Type)" style="font-size:0.7rem;">
+                                                                    @TxnLabel(txn.Type)
+                                                                </span>
+                                                            </td>
+                                                            <td>@txn.Description</td>
+                                                            <td>@txn.RecordedBy</td>
+                                                            <td class="text-end fw-semibold" style="color:@(isCredit ? "var(--cb-success)" : "inherit");">
+                                                                @(isCredit ? $"−${Math.Abs(txn.Amount):N2}" : $"${txn.Amount:N2}")
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Action panel (slides up from bottom) ──────────────────────────────
+         One panel at a time — clicking outside dismisses it.
+    ──────────────────────────────────────────────────────────────────────── -->
+    @if (activeTarget != null)
+    {
+        <div class="modal-overlay" @onclick="ClosePanel">
+            <div class="modal-panel" @onclick:stopPropagation="true">
+                <div class="modal-panel-header">
+                    <h5>@panelTitle — @activeTarget.FullName</h5>
+                    <button class="btn-close" @onclick="ClosePanel"></button>
+                </div>
+                <div class="modal-panel-body">
+
+                    @if (activeAction == "fee")
+                    {
+                        <p>
+                            Post the <strong>@currentSeason annual fee</strong> of
+                            <strong>$@activeTarget.AnnualFee.ToString("N0")</strong>
+                            (@activeTarget.MemberType) to this account?
+                        </p>
+                        <button class="btn btn-gold" @onclick="ConfirmPostFee">Confirm — Post Fee</button>
+                    }
+
+                    @if (activeAction == "payment")
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Amount ($)</label>
+                            <input class="form-control" type="number" min="0.01" step="0.01" @bind="inputAmount" placeholder="0.00" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <input class="form-control" type="text" @bind="inputDescription" placeholder="e.g. cheque #1234, e-transfer" />
+                        </div>
+                        <button class="btn btn-gold" @onclick="ConfirmPayment">Record Payment</button>
+                    }
+
+                    @if (activeAction == "fb")
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">F&amp;B Amount ($)</label>
+                            <input class="form-control" type="number" min="0.01" step="0.01" @bind="inputAmount" placeholder="0.00" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <input class="form-control" type="text" @bind="inputDescription" placeholder="e.g. Dining room – Apr 6" />
+                        </div>
+                        <button class="btn btn-gold" @onclick="ConfirmFB">Record F&amp;B Charge</button>
+                    }
+
+                    @if (activeAction == "adjust")
+                    {
+                        <p class="text-muted" style="font-size:0.85rem;">
+                            Positive amount = additional charge &nbsp;|&nbsp; Negative amount = credit or waiver.
+                        </p>
+                        <div class="mb-3">
+                            <label class="form-label">Amount ($)</label>
+                            <input class="form-control" type="number" step="0.01" @bind="inputAmount" placeholder="e.g. -100 for a $100 credit" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Reason (required)</label>
+                            <input class="form-control" type="text" @bind="inputDescription" placeholder="Describe the adjustment" />
+                        </div>
+                        <button class="btn btn-gold" @onclick="ConfirmAdjust">Record Adjustment</button>
+                    }
+
+                    @if (!string.IsNullOrEmpty(panelMessage))
+                    {
+                        <div class="mt-3" style="color:@(panelSuccess ? "var(--cb-success)" : "var(--cb-danger)");">
+                            <i class="bi @(panelSuccess ? "bi-check-circle-fill" : "bi-x-circle-fill") me-1"></i>
+                            @panelMessage
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    List<MemberBillingSummary>? summaries;
+    int currentSeason = DateTime.Now.Year;
+    string filter = "all";
+    int? expandedId;
+
+    // action panel state — one open at a time
+    MemberBillingSummary? activeTarget;
+    string activeAction     = "";
+    string panelTitle       = "";
+    string panelMessage     = "";
+    bool   panelSuccess     = false;
+    decimal inputAmount     = 0;
+    string inputDescription = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSummaries();
+    }
+
+    private async Task LoadSummaries()
+    {
+        summaries = await BillingSvc.GetAllSummariesAsync(currentSeason);
+    }
+
+    private IEnumerable<MemberBillingSummary> FilteredSummaries => filter switch
+    {
+        "arrears" => summaries!.Where(s => s.IsInArrears),
+        "unpaid"  => summaries!.Where(s => !s.AnnualFeePostedThisSeason),
+        "fb"      => summaries!.Where(s => s.FoodBeverageMinimum > 0 && !s.FoodBeverageMinimumMet),
+        _         => summaries!
+    };
+
+    private void ToggleHistory(int profileId)
+    {
+        expandedId = expandedId == profileId ? null : profileId;
+    }
+
+    // ── Panel helpers ─────────────────────────────────────────────────────────
+
+    private void OpenPostFee(MemberBillingSummary s)  { activeTarget = s; activeAction = "fee";     panelTitle = "Post Annual Fee";        ResetPanel(); }
+    private void OpenPayment(MemberBillingSummary s)  { activeTarget = s; activeAction = "payment"; panelTitle = "Record Payment";         ResetPanel(); }
+    private void OpenFB(MemberBillingSummary s)       { activeTarget = s; activeAction = "fb";      panelTitle = "Food & Beverage Charge"; ResetPanel(); }
+    private void OpenAdjust(MemberBillingSummary s)   { activeTarget = s; activeAction = "adjust";  panelTitle = "Manual Adjustment";      ResetPanel(); }
+
+    private void ClosePanel() { activeTarget = null; activeAction = ""; ResetPanel(); }
+
+    private void ResetPanel()
+    {
+        panelMessage = ""; panelSuccess = false;
+        inputAmount = 0; inputDescription = "";
+    }
+
+    // ── Confirm handlers ──────────────────────────────────────────────────────
+
+    private async Task ConfirmPostFee()
+    {
+        if (activeTarget == null) return;
+        var (ok, msg) = await BillingSvc.PostAnnualFeeAsync(
+            activeTarget.MemberProfileId, currentSeason, UserServ.CurrentUser!.Username);
+        panelSuccess = ok; panelMessage = msg;
+        if (ok) await LoadSummaries();
+    }
+
+    private async Task ConfirmPayment()
+    {
+        if (activeTarget == null) return;
+        var (ok, msg) = await BillingSvc.RecordPaymentAsync(
+            activeTarget.MemberProfileId, inputAmount, inputDescription,
+            currentSeason, UserServ.CurrentUser!.Username);
+        panelSuccess = ok; panelMessage = msg;
+        if (ok) await LoadSummaries();
+    }
+
+    private async Task ConfirmFB()
+    {
+        if (activeTarget == null) return;
+        var (ok, msg) = await BillingSvc.RecordFoodBeverageAsync(
+            activeTarget.MemberProfileId, inputAmount, inputDescription,
+            currentSeason, UserServ.CurrentUser!.Username);
+        panelSuccess = ok; panelMessage = msg;
+        if (ok) await LoadSummaries();
+    }
+
+    private async Task ConfirmAdjust()
+    {
+        if (activeTarget == null) return;
+        var (ok, msg) = await BillingSvc.RecordAdjustmentAsync(
+            activeTarget.MemberProfileId, inputAmount, inputDescription,
+            currentSeason, UserServ.CurrentUser!.Username);
+        panelSuccess = ok; panelMessage = msg;
+        if (ok) await LoadSummaries();
+    }
+
+    // ── Display helpers ───────────────────────────────────────────────────────
+
+    private static string TierBadge(MembershipTier tier) => tier switch
+    {
+        MembershipTier.Gold   => "badge-gold",
+        MembershipTier.Silver => "badge-silver",
+        MembershipTier.Bronze => "badge-bronze",
+        _                     => "badge-silver"
+    };
+
+    private static string TxnBadge(BillingTransactionType type) => type switch
+    {
+        BillingTransactionType.AnnualFee          => "badge-gold",
+        BillingTransactionType.EntranceFee        => "badge-gold",
+        BillingTransactionType.FoodBeverageCharge => "badge-bronze",
+        BillingTransactionType.Payment            => "badge-green",
+        BillingTransactionType.Adjustment         => "badge-silver",
+        _                                         => "badge-silver"
+    };
+
+    private static string TxnLabel(BillingTransactionType type) => type switch
+    {
+        BillingTransactionType.AnnualFee          => "Annual Fee",
+        BillingTransactionType.EntranceFee        => "Entrance Fee",
+        BillingTransactionType.FoodBeverageCharge => "F&B",
+        BillingTransactionType.Payment            => "Payment",
+        BillingTransactionType.Adjustment         => "Adjustment",
+        _                                         => type.ToString()
+    };
+}

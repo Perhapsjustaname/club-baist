@@ -796,3 +796,64 @@ main {
 
 .rounded-xl { border-radius: 14px !important; }
 .shadow-soft { box-shadow: 0 4px 20px rgba(0,0,0,0.08) !important; }
+
+/* ============================================================
+   Billing — alert banners, modal panel, table highlight
+   ============================================================ */
+
+/* coloured banner rows used in billing and other pages */
+.alert-banner {
+    padding: 0.75rem 1.1rem;
+    border-radius: 10px;
+    font-size: 0.88rem;
+    border-left: 4px solid transparent;
+}
+.alert-banner--warning { background: rgba(221,184,146,0.2); color: #5c3317; border-left-color: var(--cb-gold); }
+.alert-banner--success { background: rgba(39,174,96,0.10); color: #1a6b3e; border-left-color: var(--cb-success); }
+.alert-banner--info    { background: rgba(176,137,104,0.12); color: var(--cb-green-dark); border-left-color: var(--cb-green-light); }
+
+/* table row highlight for members in arrears */
+.table-row-warning td { background: rgba(192,57,43,0.05) !important; }
+
+/* floating action panel (billing admin form) */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 1040;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.modal-panel {
+    background: var(--cb-white);
+    border-radius: 16px 16px 0 0;
+    width: 100%;
+    max-width: 560px;
+    box-shadow: 0 -4px 30px rgba(0,0,0,0.15);
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.modal-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.4rem;
+    border-bottom: 1px solid var(--cb-cream-dark);
+    background: var(--cb-green-dark);
+    border-radius: 16px 16px 0 0;
+}
+
+.modal-panel-header h5 {
+    color: var(--cb-gold-light);
+    font-size: 1rem;
+    font-family: 'Playfair Display', serif;
+}
+
+.modal-panel-header .btn-close { filter: invert(1); }
+
+.modal-panel-body {
+    padding: 1.4rem;
+}
